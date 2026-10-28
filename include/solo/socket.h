@@ -75,31 +75,38 @@ solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode
 /*
  * Operations on existing socket
  */
-int solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg);
-int solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg);
+solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg);
+solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg);
 solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t ip_len, int *client_port, char **err_msg);
 
 /*
  * Stream & Connected Datagram I/O
+ * Returns SOLO_SOCK_OK with *sent and *received populated (if non-NULL),
+ * SOLO_SOCK_AGAIN if non-blocking operation would block,
+ * SOLO_SOCK_CLOSED on orderly peer disconnection (EOF),
+ * or SOLO_SOCK_ERROR on failure.
  */
-int solo_socket_send(solo_socket_t *sock, const char *buf, size_t len);
-int solo_socket_recv(solo_socket_t *sock, char *buf, size_t max_len);
-int solo_socket_write(solo_socket_t *sock, const char *buf, size_t len);
-int solo_socket_read(solo_socket_t *sock, char *buf, size_t max_len);
+solo_socket_status_t solo_socket_send(solo_socket_t *sock, const char *buf, size_t len, size_t *sent);
+solo_socket_status_t solo_socket_recv(solo_socket_t *sock, char *buf, size_t max_len, size_t *received);
+solo_socket_status_t solo_socket_write(solo_socket_t *sock, const char *buf, size_t len, size_t *sent);
+solo_socket_status_t solo_socket_read(solo_socket_t *sock, char *buf, size_t max_len, size_t *received);
 
 /*
  * Datagram (UDP) I/O
  */
-int solo_socket_sendto(solo_socket_t *sock, const char *buf, size_t len, const char *host, int port);
-int solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t max_len, char *src_ip, size_t ip_len, int *src_port);
+solo_socket_status_t solo_socket_sendto(solo_socket_t *sock, const char *buf, size_t len,
+                                        const char *host, int port, size_t *sent);
+solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t max_len,
+                                          char *src_ip, size_t ip_len, int *src_port,
+                                          size_t *received);
 
 /*
  * Mode, Timeout & Polling
  */
-int solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg);
+solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg);
 solo_socket_mode_t solo_socket_get_mode(const solo_socket_t *sock);
 solo_socket_type_t solo_socket_get_type(const solo_socket_t *sock);
-int solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg);
+solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg);
 int solo_socket_wait(solo_socket_t *sock, int events, int timeout_ms);
 int solo_socket_get_fd(const solo_socket_t *sock);
 

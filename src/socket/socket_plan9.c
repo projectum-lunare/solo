@@ -166,7 +166,7 @@ void solo_socket_close(solo_socket_t *sock)
     free(sock);
 }
 
-int solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg)
+solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg)
 {
     char cmd[256];
     (void)backlog;
@@ -246,7 +246,7 @@ solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode
     return sock;
 }
 
-int solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg)
+solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg)
 {
     char cmd[256];
     char data_path[64];
@@ -303,8 +303,8 @@ int solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, ch
 
 solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
 {
+    solo_socket_status_t status;
     solo_socket_t *sock = solo_socket_create(SOLO_SOCK_TCP, mode, err_msg);
-    int status;
     if (sock == NULL) {
         return NULL;
     }
@@ -436,9 +436,12 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     return client_sock;
 }
 
-int solo_socket_send(solo_socket_t *sock, const char *buf, size_t len)
+solo_socket_status_t solo_socket_send(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
 {
     ssize_t n;
+    if (sent != NULL) {
+        *sent = 0;
+    }
     if (sock == NULL || sock->data_fd < 0 || buf == NULL) {
         return SOLO_SOCK_ERROR;
     }
@@ -449,12 +452,18 @@ int solo_socket_send(solo_socket_t *sock, const char *buf, size_t len)
         }
         return SOLO_SOCK_ERROR;
     }
-    return (int)n;
+    if (sent != NULL) {
+        *sent = (size_t)n;
+    }
+    return SOLO_SOCK_OK;
 }
 
-int solo_socket_recv(solo_socket_t *sock, char *buf, size_t max_len)
+solo_socket_status_t solo_socket_recv(solo_socket_t *sock, char *buf, size_t max_len, size_t *received)
 {
     ssize_t n;
+    if (received != NULL) {
+        *received = 0;
+    }
     if (sock == NULL || sock->data_fd < 0 || buf == NULL || max_len == 0) {
         return SOLO_SOCK_ERROR;
     }
@@ -468,23 +477,29 @@ int solo_socket_recv(solo_socket_t *sock, char *buf, size_t max_len)
     if (n == 0 && sock->type == SOLO_SOCK_TCP) {
         return SOLO_SOCK_CLOSED;
     }
-    return (int)n;
+    if (received != NULL) {
+        *received = (size_t)n;
+    }
+    return SOLO_SOCK_OK;
 }
 
-int solo_socket_write(solo_socket_t *sock, const char *buf, size_t len)
+solo_socket_status_t solo_socket_write(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
 {
-    return solo_socket_send(sock, buf, len);
+    return solo_socket_send(sock, buf, len, sent);
 }
 
-int solo_socket_read(solo_socket_t *sock, char *buf, size_t max_len)
+solo_socket_status_t solo_socket_read(solo_socket_t *sock, char *buf, size_t max_len, size_t *received)
 {
-    return solo_socket_recv(sock, buf, max_len);
+    return solo_socket_recv(sock, buf, max_len, received);
 }
 
-int solo_socket_sendto(solo_socket_t *sock, const char *buf, size_t len,
-                       const char *host, int port)
+solo_socket_status_t solo_socket_sendto(solo_socket_t *sock, const char *buf, size_t len,
+                                        const char *host, int port, size_t *sent)
 {
     char cmd[256];
+    if (sent != NULL) {
+        *sent = 0;
+    }
     if (sock == NULL || sock->data_fd < 0 || buf == NULL || host == NULL) {
         return SOLO_SOCK_ERROR;
     }
@@ -495,14 +510,15 @@ int solo_socket_sendto(solo_socket_t *sock, const char *buf, size_t len,
         }
     }
 
-    return solo_socket_send(sock, buf, len);
+    return solo_socket_send(sock, buf, len, sent);
 }
 
-int solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t max_len,
-                         char *src_ip, size_t ip_len, int *src_port)
+solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t max_len,
+                                          char *src_ip, size_t ip_len, int *src_port,
+                                          size_t *received)
 {
-    int n = solo_socket_recv(sock, buf, max_len);
-    if (n > 0) {
+    solo_socket_status_t status = solo_socket_recv(sock, buf, max_len, received);
+    if (status == SOLO_SOCK_OK) {
         if (src_ip != NULL || src_port != NULL) {
             char remote_path[64];
             char remote_buf[128];
@@ -534,10 +550,10 @@ int solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t max_len,
             }
         }
     }
-    return n;
+    return status;
 }
 
-int solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
+solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
 {
     if (sock == NULL) {
         if (err_msg != NULL) {
@@ -572,7 +588,7 @@ solo_socket_type_t solo_socket_get_type(const solo_socket_t *sock)
     return sock ? sock->type : SOLO_SOCK_TCP;
 }
 
-int solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
+solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
 {
     if (sock == NULL) {
         if (err_msg != NULL) {

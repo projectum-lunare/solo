@@ -151,7 +151,10 @@ int main(void) {
         return 1;
     }
 
-    solo_socket_send(sock, "GET / HTTP/1.0\r\n\r\n", 18);
+    size_t sent = 0;
+    if (solo_socket_send(sock, "GET / HTTP/1.0\r\n\r\n", 18, &sent) == SOLO_SOCK_OK) {
+        printf("Sent %zu bytes\n", sent);
+    }
     solo_socket_close(sock);
     return 0;
 }

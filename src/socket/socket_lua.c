@@ -94,25 +94,26 @@ static int lsocket_send(lua_State *L)
     lsocket_t *s = (lsocket_t *)luaL_checkudata(L, 1, SOCKET_MT);
     size_t len;
     const char *data = luaL_checklstring(L, 2, &len);
-    int res;
+    size_t sent = 0;
+    solo_socket_status_t st;
 
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to send on closed socket");
     }
 
-    res = solo_socket_send(s->handle, data, len);
-    if (res == SOLO_SOCK_AGAIN) {
+    st = solo_socket_send(s->handle, data, len, &sent);
+    if (st == SOLO_SOCK_AGAIN) {
         lua_pushnil(L);
         lua_pushstring(L, "again");
         return 2;
     }
-    if (res < 0) {
+    if (st != SOLO_SOCK_OK) {
         lua_pushnil(L);
         lua_pushstring(L, "send failed");
         return 2;
     }
 
-    lua_pushinteger(L, res);
+    lua_pushinteger(L, (lua_Integer)sent);
     return 1;
 }
 
@@ -121,7 +122,8 @@ static int lsocket_recv(lua_State *L)
     lsocket_t *s = (lsocket_t *)luaL_checkudata(L, 1, SOCKET_MT);
     lua_Integer max_len = luaL_optinteger(L, 2, 4096);
     char *buf;
-    int res;
+    size_t received = 0;
+    solo_socket_status_t st;
 
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to recv on closed socket");
@@ -137,29 +139,29 @@ static int lsocket_recv(lua_State *L)
         return luaL_error(L, "out of memory in socket recv");
     }
 
-    res = solo_socket_recv(s->handle, buf, (size_t)max_len);
-    if (res == SOLO_SOCK_AGAIN) {
+    st = solo_socket_recv(s->handle, buf, (size_t)max_len, &received);
+    if (st == SOLO_SOCK_AGAIN) {
         free(buf);
         lua_pushnil(L);
         lua_pushstring(L, "again");
         return 2;
     }
 
-    if (res < 0) {
-        free(buf);
-        lua_pushnil(L);
-        lua_pushstring(L, "recv error");
-        return 2;
-    }
-
-    if (res == 0) {
+    if (st == SOLO_SOCK_CLOSED) {
         free(buf);
         lua_pushnil(L);
         lua_pushstring(L, "closed");
         return 2;
     }
 
-    lua_pushlstring(L, buf, (size_t)res);
+    if (st != SOLO_SOCK_OK) {
+        free(buf);
+        lua_pushnil(L);
+        lua_pushstring(L, "recv error");
+        return 2;
+    }
+
+    lua_pushlstring(L, buf, received);
     free(buf);
     return 1;
 }
@@ -171,25 +173,26 @@ static int lsocket_sendto(lua_State *L)
     const char *data = luaL_checklstring(L, 2, &len);
     const char *host = luaL_checkstring(L, 3);
     int port = (int)luaL_checkinteger(L, 4);
-    int res;
+    size_t sent = 0;
+    solo_socket_status_t st;
 
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to sendto on closed socket");
     }
 
-    res = solo_socket_sendto(s->handle, data, len, host, port);
-    if (res == SOLO_SOCK_AGAIN) {
+    st = solo_socket_sendto(s->handle, data, len, host, port, &sent);
+    if (st == SOLO_SOCK_AGAIN) {
         lua_pushnil(L);
         lua_pushstring(L, "again");
         return 2;
     }
-    if (res < 0) {
+    if (st != SOLO_SOCK_OK) {
         lua_pushnil(L);
         lua_pushstring(L, "sendto failed");
         return 2;
     }
 
-    lua_pushinteger(L, res);
+    lua_pushinteger(L, (lua_Integer)sent);
     return 1;
 }
 
@@ -200,7 +203,8 @@ static int lsocket_recvfrom(lua_State *L)
     char src_ip[64];
     int src_port = 0;
     char *buf;
-    int res;
+    size_t received = 0;
+    solo_socket_status_t st;
 
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to recvfrom on closed socket");
@@ -218,22 +222,29 @@ static int lsocket_recvfrom(lua_State *L)
         return luaL_error(L, "out of memory in socket recvfrom");
     }
 
-    res = solo_socket_recvfrom(s->handle, buf, (size_t)max_len, src_ip, sizeof(src_ip), &src_port);
-    if (res == SOLO_SOCK_AGAIN) {
+    st = solo_socket_recvfrom(s->handle, buf, (size_t)max_len, src_ip, sizeof(src_ip), &src_port, &received);
+    if (st == SOLO_SOCK_AGAIN) {
         free(buf);
         lua_pushnil(L);
         lua_pushstring(L, "again");
         return 2;
     }
 
-    if (res < 0) {
+    if (st == SOLO_SOCK_CLOSED) {
+        free(buf);
+        lua_pushnil(L);
+        lua_pushstring(L, "closed");
+        return 2;
+    }
+
+    if (st != SOLO_SOCK_OK) {
         free(buf);
         lua_pushnil(L);
         lua_pushstring(L, "recvfrom error");
         return 2;
     }
 
-    lua_pushlstring(L, buf, (size_t)res);
+    lua_pushlstring(L, buf, received);
     free(buf);
     lua_pushstring(L, src_ip);
     lua_pushinteger(L, src_port);
@@ -273,7 +284,7 @@ static int lsocket_connect_sock(lua_State *L)
     const char *host = luaL_checkstring(L, 2);
     int port = (int)luaL_checkinteger(L, 3);
     char *err_msg = NULL;
-    int res;
+    solo_socket_status_t res;
 
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to connect closed socket");
