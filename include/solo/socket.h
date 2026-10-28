@@ -20,60 +20,91 @@ extern "C" {
 typedef struct solo_socket solo_socket_t;
 
 /*
- * Connects to a remote TCP host:port.
- * Returns socket handle on success, NULL on failure with err_msg populated.
+ * Socket transport / protocol type
  */
-solo_socket_t *solo_socket_connect(const char *host, int port, char **err_msg);
+typedef enum solo_socket_type {
+    SOLO_SOCK_TCP = 1,
+    SOLO_SOCK_UDP = 2
+} solo_socket_type_t;
+
+#define SOLO_SOCK_STREAM SOLO_SOCK_TCP
+#define SOLO_SOCK_DGRAM  SOLO_SOCK_UDP
 
 /*
- * Binds a server TCP socket to host:port and starts listening with backlog.
- * Returns server socket handle on success, NULL on failure with err_msg populated.
+ * Socket blocking mode (Synchronous vs Asynchronous)
  */
-solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, char **err_msg);
+typedef enum solo_socket_mode {
+    SOLO_SOCK_BLOCKING    = 0,
+    SOLO_SOCK_NONBLOCKING = 1
+} solo_socket_mode_t;
 
 /*
- * Accepts an incoming client connection on a listening server socket.
- * Returns client socket handle on success, NULL on failure with err_msg populated.
- * client_ip and client_port are optional output parameters.
+ * Status and error codes
  */
-solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t ip_len,
-                                        int *client_port, char **err_msg);
+typedef enum solo_socket_status {
+    SOLO_SOCK_OK     =  0,
+    SOLO_SOCK_ERROR  = -1,
+    SOLO_SOCK_AGAIN  = -2,
+    SOLO_SOCK_CLOSED = -3
+} solo_socket_status_t;
 
 /*
- * Reads up to max_len bytes from the socket.
- * Returns number of bytes read (> 0), 0 on orderly peer disconnect (EOF),
- * or -1 on error.
+ * Readiness polling events
  */
+typedef enum solo_socket_event {
+    SOLO_SOCK_POLL_READ  = 1 << 0,
+    SOLO_SOCK_POLL_WRITE = 1 << 1,
+    SOLO_SOCK_POLL_ERR   = 1 << 2
+} solo_socket_event_t;
+
+/*
+ * Lifecycle & Creation
+ */
+solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char **err_msg);
+solo_socket_t *solo_socket_tcp(solo_socket_mode_t mode, char **err_msg);
+solo_socket_t *solo_socket_udp(solo_socket_mode_t mode, char **err_msg);
+void solo_socket_close(solo_socket_t *sock);
+
+/*
+ * Quick Setup (Connect & Bind)
+ */
+solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char **err_msg);
+solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_socket_mode_t mode, char **err_msg);
+solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode_t mode, char **err_msg);
+
+/*
+ * Operations on existing socket
+ */
+int solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg);
+int solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg);
+solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t ip_len, int *client_port, char **err_msg);
+
+/*
+ * Stream & Connected Datagram I/O
+ */
+int solo_socket_send(solo_socket_t *sock, const char *buf, size_t len);
+int solo_socket_recv(solo_socket_t *sock, char *buf, size_t max_len);
+int solo_socket_write(solo_socket_t *sock, const char *buf, size_t len);
 int solo_socket_read(solo_socket_t *sock, char *buf, size_t max_len);
 
 /*
- * Writes len bytes from buf to the socket.
- * Returns number of bytes written (>= 0) or -1 on error.
+ * Datagram (UDP) I/O
  */
-int solo_socket_write(solo_socket_t *sock, const char *buf, size_t len);
+int solo_socket_sendto(solo_socket_t *sock, const char *buf, size_t len, const char *host, int port);
+int solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t max_len, char *src_ip, size_t ip_len, int *src_port);
 
 /*
- * Closes the socket and frees associated memory resources.
+ * Mode, Timeout & Polling
  */
-void solo_socket_close(solo_socket_t *sock);
+int solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg);
+solo_socket_mode_t solo_socket_get_mode(const solo_socket_t *sock);
+solo_socket_type_t solo_socket_get_type(const solo_socket_t *sock);
+int solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg);
+int solo_socket_wait(solo_socket_t *sock, int events, int timeout_ms);
+int solo_socket_get_fd(const solo_socket_t *sock);
 
 #ifdef __cplusplus
 }
 #endif
-
-
-#define SOLO_SOCK_BLOCKING    0
-#define SOLO_SOCK_NONBLOCKING 1
-
-#define SOLO_SOCK_OK          0
-#define SOLO_SOCK_ERROR      -1
-#define SOLO_SOCK_AGAIN      -2
-#define SOLO_SOCK_CLOSED     -3
-
-/*
- * Sets socket blocking or non-blocking mode.
- * Returns 0 on success, or -1 on error with err_msg populated.
- */
-int solo_socket_set_mode(solo_socket_t *sock, int mode, char **err_msg);
 
 #endif /* SOLO_SOCKET_H */

@@ -39,7 +39,27 @@ static void test_sandbox(void)
     printf("  [PASS] sandbox verified.\n");
 }
 
-static void test_socket_loopback(void)
+static void test_socket_enums(void)
+{
+    printf("  [TEST] socket: checking Enum definitions...\n");
+    assert(SOLO_SOCK_TCP == 1);
+    assert(SOLO_SOCK_UDP == 2);
+
+    assert(SOLO_SOCK_BLOCKING == 0);
+    assert(SOLO_SOCK_NONBLOCKING == 1);
+
+    assert(SOLO_SOCK_OK == 0);
+    assert(SOLO_SOCK_ERROR == -1);
+    assert(SOLO_SOCK_AGAIN == -2);
+    assert(SOLO_SOCK_CLOSED == -3);
+
+    assert(SOLO_SOCK_POLL_READ == (1 << 0));
+    assert(SOLO_SOCK_POLL_WRITE == (1 << 1));
+    assert(SOLO_SOCK_POLL_ERR == (1 << 2));
+    printf("  [PASS] socket Enums verified.\n");
+}
+
+static void test_socket_tcp_sync(void)
 {
     char *err_msg = NULL;
     int port = 19930;
@@ -48,32 +68,32 @@ static void test_socket_loopback(void)
     solo_socket_t *accepted;
     char client_ip[64];
     int client_port = 0;
-    const char *msg = "Direct socket test for solo!";
+    const char *msg = "Direct TCP sync test for solo!";
     char buf[128];
     int n;
 
-    printf("  [TEST] socket: loopback TCP on 127.0.0.1:%d...\n", port);
-    server = solo_socket_bind("127.0.0.1", port, 5, &err_msg);
+    printf("  [TEST] socket: loopback TCP sync on 127.0.0.1:%d...\n", port);
+    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
     if (!server) {
-        printf("  [WARN] Cannot bind port %d (%s), trying port 19931...\n", port, err_msg ? err_msg : "unknown");
-        free(err_msg);
-        err_msg = NULL;
         port = 19931;
-        server = solo_socket_bind("127.0.0.1", port, 5, &err_msg);
+        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
     }
     assert(server != NULL);
+    assert(solo_socket_get_type(server) == SOLO_SOCK_TCP);
+    assert(solo_socket_get_mode(server) == SOLO_SOCK_BLOCKING);
 
-    client = solo_socket_connect("127.0.0.1", port, &err_msg);
+    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
     assert(client != NULL);
+    assert(solo_socket_get_type(client) == SOLO_SOCK_TCP);
 
     accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, &err_msg);
     assert(accepted != NULL);
 
-    n = solo_socket_write(client, msg, strlen(msg));
+    n = solo_socket_send(client, msg, strlen(msg));
     assert(n == (int)strlen(msg));
 
     memset(buf, 0, sizeof(buf));
-    n = solo_socket_read(accepted, buf, sizeof(buf) - 1);
+    n = solo_socket_recv(accepted, buf, sizeof(buf) - 1);
     assert(n == (int)strlen(msg));
     assert(strcmp(buf, msg) == 0);
 
@@ -81,7 +101,215 @@ static void test_socket_loopback(void)
     solo_socket_close(accepted);
     solo_socket_close(server);
 
-    printf("  [PASS] socket loopback verified (%d bytes transferred).\n", n);
+    printf("  [PASS] socket TCP sync loopback verified (%d bytes transferred).\n", n);
+}
+
+static void test_socket_tcp_async(void)
+{
+    char *err_msg = NULL;
+    int port = 19940;
+    solo_socket_t *server;
+    solo_socket_t *client;
+    solo_socket_t *accepted;
+    char client_ip[64];
+    int client_port = 0;
+    const char *msg = "Async TCP non-blocking message";
+    char buf[128];
+    int n, ev;
+
+    printf("  [TEST] socket: loopback TCP async on 127.0.0.1:%d...\n", port);
+    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_NONBLOCKING, &err_msg);
+    if (!server) {
+        port = 19941;
+        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_NONBLOCKING, &err_msg);
+    }
+    assert(server != NULL);
+    assert(solo_socket_get_mode(server) == SOLO_SOCK_NONBLOCKING);
+
+    /* Non-blocking accept with no pending connection should return NULL without error */
+    err_msg = NULL;
+    accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, &err_msg);
+    assert(accepted == NULL);
+    assert(err_msg == NULL);
+
+    /* Connect client */
+    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    assert(client != NULL);
+
+    /* Server should become readable */
+    ev = solo_socket_wait(server, SOLO_SOCK_POLL_READ, 1000);
+    assert(ev & SOLO_SOCK_POLL_READ);
+
+    /* Accept client */
+    accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, &err_msg);
+    assert(accepted != NULL);
+
+    /* Accepted socket inherits non-blocking from server */
+    assert(solo_socket_get_mode(accepted) == SOLO_SOCK_NONBLOCKING);
+
+    /* Read on empty accepted socket should return SOLO_SOCK_AGAIN */
+    n = solo_socket_recv(accepted, buf, sizeof(buf));
+    assert(n == SOLO_SOCK_AGAIN);
+
+    /* Write from client */
+    n = solo_socket_send(client, msg, strlen(msg));
+    assert(n == (int)strlen(msg));
+
+    /* Wait for read readiness */
+    ev = solo_socket_wait(accepted, SOLO_SOCK_POLL_READ, 1000);
+    assert(ev & SOLO_SOCK_POLL_READ);
+
+    /* Read data */
+    memset(buf, 0, sizeof(buf));
+    n = solo_socket_recv(accepted, buf, sizeof(buf) - 1);
+    assert(n == (int)strlen(msg));
+    assert(strcmp(buf, msg) == 0);
+
+    solo_socket_close(client);
+    solo_socket_close(accepted);
+    solo_socket_close(server);
+
+    printf("  [PASS] socket TCP async verified.\n");
+}
+
+static void test_socket_udp_sync(void)
+{
+    char *err_msg = NULL;
+    int port = 19950;
+    solo_socket_t *server;
+    solo_socket_t *client;
+    char src_ip[64];
+    int src_port = 0;
+    const char *msg = "Direct UDP datagram!";
+    const char *reply = "UDP reply ack";
+    char buf[128];
+    int n;
+
+    printf("  [TEST] socket: loopback UDP sync on 127.0.0.1:%d...\n", port);
+    server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    if (!server) {
+        port = 19951;
+        server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    }
+    assert(server != NULL);
+    assert(solo_socket_get_type(server) == SOLO_SOCK_UDP);
+
+    client = solo_socket_udp(SOLO_SOCK_BLOCKING, &err_msg);
+    assert(client != NULL);
+    assert(solo_socket_get_type(client) == SOLO_SOCK_UDP);
+
+    /* Client sends datagram to server */
+    n = solo_socket_sendto(client, msg, strlen(msg), "127.0.0.1", port);
+    assert(n == (int)strlen(msg));
+
+    /* Server receives datagram */
+    memset(buf, 0, sizeof(buf));
+    n = solo_socket_recvfrom(server, buf, sizeof(buf) - 1, src_ip, sizeof(src_ip), &src_port);
+    assert(n == (int)strlen(msg));
+    assert(strcmp(buf, msg) == 0);
+    assert(src_port > 0);
+
+    /* Server replies to client using src_ip and src_port */
+    n = solo_socket_sendto(server, reply, strlen(reply), src_ip, src_port);
+    assert(n == (int)strlen(reply));
+
+    /* Client receives reply */
+    memset(buf, 0, sizeof(buf));
+    n = solo_socket_recvfrom(client, buf, sizeof(buf) - 1, NULL, 0, NULL);
+    assert(n == (int)strlen(reply));
+    assert(strcmp(buf, reply) == 0);
+
+    solo_socket_close(client);
+    solo_socket_close(server);
+
+    printf("  [PASS] socket UDP sync loopback verified.\n");
+}
+
+static void test_socket_udp_async(void)
+{
+    char *err_msg = NULL;
+    int port = 19960;
+    solo_socket_t *server;
+    solo_socket_t *client;
+    const char *msg = "UDP nonblocking datagram!";
+    char buf[128];
+    int n, ev;
+
+    printf("  [TEST] socket: loopback UDP async on 127.0.0.1:%d...\n", port);
+    server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_NONBLOCKING, &err_msg);
+    if (!server) {
+        port = 19961;
+        server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_NONBLOCKING, &err_msg);
+    }
+    assert(server != NULL);
+    assert(solo_socket_get_mode(server) == SOLO_SOCK_NONBLOCKING);
+
+    /* Recvfrom on empty UDP server should return SOLO_SOCK_AGAIN */
+    n = solo_socket_recvfrom(server, buf, sizeof(buf), NULL, 0, NULL);
+    assert(n == SOLO_SOCK_AGAIN);
+
+    /* Poll timeout check */
+    ev = solo_socket_wait(server, SOLO_SOCK_POLL_READ, 50);
+    assert(ev == 0); /* timeout */
+
+    /* Send datagram from client */
+    client = solo_socket_udp(SOLO_SOCK_BLOCKING, &err_msg);
+    assert(client != NULL);
+    n = solo_socket_sendto(client, msg, strlen(msg), "127.0.0.1", port);
+    assert(n == (int)strlen(msg));
+
+    /* Wait should now trigger read readiness */
+    ev = solo_socket_wait(server, SOLO_SOCK_POLL_READ, 1000);
+    assert(ev & SOLO_SOCK_POLL_READ);
+
+    /* Recvfrom reads datagram */
+    memset(buf, 0, sizeof(buf));
+    n = solo_socket_recvfrom(server, buf, sizeof(buf) - 1, NULL, 0, NULL);
+    assert(n == (int)strlen(msg));
+    assert(strcmp(buf, msg) == 0);
+
+    solo_socket_close(client);
+    solo_socket_close(server);
+
+    printf("  [PASS] socket UDP async verified.\n");
+}
+
+static void test_socket_timeout(void)
+{
+    char *err_msg = NULL;
+    int port = 19970;
+    solo_socket_t *server;
+    solo_socket_t *client;
+    solo_socket_t *accepted;
+    char buf[64];
+    int n;
+
+    printf("  [TEST] socket: checking socket timeout...\n");
+    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    if (!server) {
+        port = 19971;
+        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    }
+    assert(server != NULL);
+
+    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    assert(client != NULL);
+
+    accepted = solo_socket_accept(server, NULL, 0, NULL, &err_msg);
+    assert(accepted != NULL);
+
+    /* Set 100ms receive timeout on accepted socket */
+    assert(solo_socket_set_timeout(accepted, 100, &err_msg) == SOLO_SOCK_OK);
+
+    /* Reading with no data sent should timeout and return SOLO_SOCK_AGAIN */
+    n = solo_socket_recv(accepted, buf, sizeof(buf));
+    assert(n == SOLO_SOCK_AGAIN);
+
+    solo_socket_close(client);
+    solo_socket_close(accepted);
+    solo_socket_close(server);
+
+    printf("  [PASS] socket timeout verified.\n");
 }
 
 int main(void)
@@ -94,7 +322,12 @@ int main(void)
     test_platform();
     test_filesystem();
     test_sandbox();
-    test_socket_loopback();
+    test_socket_enums();
+    test_socket_tcp_sync();
+    test_socket_tcp_async();
+    test_socket_udp_sync();
+    test_socket_udp_async();
+    test_socket_timeout();
 
     printf("\n>>> ALL C TESTS PASSED SUCCESSFULLY! <<<\n");
     return 0;

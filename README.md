@@ -52,9 +52,11 @@ The library is structured as a cohesive monorepo divided into specialized subsys
 
 ### 5. `socket` — Raw Network Sockets
 
-- Unified TCP socket abstraction with blocking and non-blocking modes (`solo_socket_set_mode`).
-- Client connections (`solo_socket_connect`), server binding (`solo_socket_bind`), and client acceptance (`solo_socket_accept`).
-- Event-loop friendly for asynchronous I/O and multiplexed transports.
+- Unified TCP & UDP socket abstraction with typed Enums (`solo.socket.type`, `solo.socket.mode`, `solo.socket.event`, `solo.socket.status`).
+- Synchronous and asynchronous operation modes (`sock:set_mode`, `sock:set_blocking`, `sock:set_timeout`).
+- TCP client connections (`solo.socket.connect`), server binding (`solo.socket.bind`), and client acceptance (`sock:accept`).
+- UDP datagram sockets (`solo.socket.udp`, `solo.socket.udp_bind`), datagram transmission (`sock:sendto`), and reception with sender addressing (`sock:recvfrom`).
+- Asynchronous multiplexing via `solo.socket.select` and single-socket readiness waiting (`sock:wait`).
 - Backends: BSD Sockets (POSIX, macOS, Linux, BSD), Winsock 2 (Windows NT / CE), WATT-32 (MS-DOS 32-bit), `bsdsocket.library` (AmigaOS m68k), OS/2, Plan 9, KolibriOS.
 
 ### 6. `sandbox` — Kernel-Level Sandboxing
@@ -142,14 +144,14 @@ int main(void) {
         printf("Host configuration exists on disk.\n");
     }
 
-    /* Connect to raw socket */
-    solo_socket_t *sock = solo_socket_connect("127.0.0.1", 1993, &err);
+    /* Connect to raw TCP socket */
+    solo_socket_t *sock = solo_socket_connect("127.0.0.1", 1993, SOLO_SOCK_BLOCKING, &err);
     if (!sock) {
         fprintf(stderr, "Connection failed: %s\n", err);
         return 1;
     }
 
-    solo_socket_write(sock, "GET / HTTP/1.0\r\n\r\n", 18);
+    solo_socket_send(sock, "GET / HTTP/1.0\r\n\r\n", 18);
     solo_socket_close(sock);
     return 0;
 }
