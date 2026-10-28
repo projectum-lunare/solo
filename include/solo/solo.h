@@ -11,13 +11,30 @@
 #ifndef SOLO_H
 #define SOLO_H
 
+#ifndef SOLO_NO_PLATFORM
 #include <solo/platform.h>
+#endif
+
+#ifndef SOLO_NO_FILESYSTEM
 #include <solo/filesystem.h>
 #include <solo/fs.h>
+#endif
+
+#ifndef SOLO_NO_PARALLEL
 #include <solo/parallel.h>
+#endif
+
+#ifndef SOLO_NO_SERIAL
 #include <solo/serial.h>
+#endif
+
+#ifndef SOLO_NO_SOCKET
 #include <solo/socket.h>
+#endif
+
+#ifndef SOLO_NO_SANDBOX
 #include <solo/sandbox.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {

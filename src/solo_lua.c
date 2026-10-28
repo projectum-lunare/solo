@@ -14,13 +14,30 @@
 
 #include <solo/solo.h>
 
+#ifndef SOLO_NO_PLATFORM
 int luaopen_solo_platform(lua_State *L);
+#endif
+
+#ifndef SOLO_NO_FILESYSTEM
 int luaopen_solo_filesystem(lua_State *L);
 int luaopen_solo_fs(lua_State *L);
+#endif
+
+#ifndef SOLO_NO_PARALLEL
 int luaopen_solo_parallel(lua_State *L);
+#endif
+
+#ifndef SOLO_NO_SERIAL
 int luaopen_solo_serial(lua_State *L);
+#endif
+
+#ifndef SOLO_NO_SOCKET
 int luaopen_solo_socket(lua_State *L);
+#endif
+
+#ifndef SOLO_NO_SANDBOX
 int luaopen_solo_sandbox(lua_State *L);
+#endif
 
 static int lsolo_version(lua_State *L)
 {
@@ -60,9 +77,12 @@ int luaopen_solo(lua_State *L)
     luaL_register(L, NULL, solo_funcs);
 #endif
 
+#ifndef SOLO_NO_PLATFORM
     load_submodule(L, "solo.platform", luaopen_solo_platform);
     lua_setfield(L, -2, "platform");
+#endif
 
+#ifndef SOLO_NO_FILESYSTEM
     load_submodule(L, "solo.filesystem", luaopen_solo_filesystem);
     lua_pushvalue(L, -1);
     lua_setfield(L, -3, "filesystem");
@@ -78,18 +98,27 @@ int luaopen_solo(lua_State *L)
         lua_pop(L, 1);
     }
     lua_pop(L, 1);
+#endif
 
+#ifndef SOLO_NO_PARALLEL
     load_submodule(L, "solo.parallel", luaopen_solo_parallel);
     lua_setfield(L, -2, "parallel");
+#endif
 
+#ifndef SOLO_NO_SERIAL
     load_submodule(L, "solo.serial", luaopen_solo_serial);
     lua_setfield(L, -2, "serial");
+#endif
 
+#ifndef SOLO_NO_SOCKET
     load_submodule(L, "solo.socket", luaopen_solo_socket);
     lua_setfield(L, -2, "socket");
+#endif
 
+#ifndef SOLO_NO_SANDBOX
     load_submodule(L, "solo.sandbox", luaopen_solo_sandbox);
     lua_setfield(L, -2, "sandbox");
+#endif
 
     return 1;
 }

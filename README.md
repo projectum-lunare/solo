@@ -177,6 +177,33 @@ make test
 make clean
 ```
 
+### Modular Builds & Feature Flags
+
+`solo` is fully decoupled. If an application only needs specific subsystems, unneeded modules can be excluded at compile-time to reduce binary size and eliminate external library dependencies:
+
+```bash
+# Compile only specific modules (e.g. platform detection and serial UART):
+make MODULES="platform serial"
+
+# Build standalone Lua C submodules (build/lua/solo/*.so):
+make modules
+```
+
+#### C Preprocessor Flags
+- `-DSOLO_NO_SOCKET`: Exclude networking and TCP/UDP sockets.
+- `-DSOLO_NO_SERIAL`: Exclude serial port abstractions.
+- `-DSOLO_NO_PARALLEL`: Exclude parallel port abstractions.
+- `-DSOLO_NO_FILESYSTEM`: Exclude filesystem abstractions.
+- `-DSOLO_NO_SANDBOX`: Exclude OS kernel sandboxing.
+- `-DSOLO_NO_PLATFORM`: Exclude platform metadata.
+
+#### Standalone Lua Submodules
+Submodules can be required independently without loading the umbrella library or its dependencies:
+```lua
+local platform = require("solo.platform") -- only platform detection (~17 KB)
+local serial   = require("solo.serial")   -- only serial communication (~27 KB)
+```
+
 ### Cross-Platform Multi-Target Builds
 
 Modular platform fragments are located in `mk/*.mk` and output platform static libraries to `build/<platform>/`:

@@ -1,36 +1,46 @@
-# mk/atarist.mk - Atari ST / FreeMiNT Target (m68k-atari-mint-gcc)
+# mk/atarist.mk - Atari ST m68k Target (m68k-atari-mint-gcc)
 
-ATARI_SDK ?= $(HOME)/.local/opt/atarist-sdk
+ATARIST_SDK ?= $(HOME)/.local/opt/atarist-sdk
 
-ATARI_BUILD_DIR ?= build/atarist
+ATARIST_BUILD_DIR ?= build/atarist
 
-ATARI_CC     ?= $(ATARI_SDK)/bin/m68k-atari-mint-gcc
-ATARI_AR     ?= $(ATARI_SDK)/bin/m68k-atari-mint-ar
-ATARI_RANLIB ?= $(ATARI_SDK)/bin/m68k-atari-mint-ranlib
+ATARIST_CC     ?= $(ATARIST_SDK)/bin/m68k-atari-mint-gcc
+ATARIST_AR     ?= $(ATARIST_SDK)/bin/m68k-atari-mint-ar
+ATARIST_RANLIB ?= $(ATARIST_SDK)/bin/m68k-atari-mint-ranlib
 
-ATARI_CFLAGS ?= -Wall -Wextra -O2 -std=gnu89 -m68000 -msoft-float -Iinclude
+ALL_MODULES ?= platform filesystem parallel serial socket sandbox
+MODULES     ?= $(ALL_MODULES)
+SOLO_MODULE_DEFS ?= \
+    $(if $(filter platform,$(MODULES)),,-DSOLO_NO_PLATFORM) \
+    $(if $(filter filesystem,$(MODULES)),,-DSOLO_NO_FILESYSTEM) \
+    $(if $(filter parallel,$(MODULES)),,-DSOLO_NO_PARALLEL) \
+    $(if $(filter serial,$(MODULES)),,-DSOLO_NO_SERIAL) \
+    $(if $(filter socket,$(MODULES)),,-DSOLO_NO_SOCKET) \
+    $(if $(filter sandbox,$(MODULES)),,-DSOLO_NO_SANDBOX)
 
-ATARI_SRCS = \
+ATARIST_CFLAGS ?= -Wall -Wextra -O2 -std=gnu89 -m68000 -msoft-float $(SOLO_MODULE_DEFS) -Iinclude
+
+ATARIST_SRCS = \
     src/solo.c \
-    src/platform/platform.c \
-    src/filesystem/filesystem.c \
-    src/parallel/parallel_atarist.c \
-    src/serial/serial_atarist.c \
-    src/socket/socket_atarist.c \
-    src/sandbox/sandbox_stub.c
+    $(if $(filter platform,$(MODULES)),src/platform/platform.c) \
+    $(if $(filter filesystem,$(MODULES)),src/filesystem/filesystem.c) \
+    $(if $(filter parallel,$(MODULES)),src/parallel/parallel_atarist.c) \
+    $(if $(filter serial,$(MODULES)),src/serial/serial_atarist.c) \
+    $(if $(filter socket,$(MODULES)),src/socket/socket_atarist.c) \
+    $(if $(filter sandbox,$(MODULES)),src/sandbox/sandbox_stub.c)
 
-ATARI_OBJS = $(patsubst src/%.c,$(ATARI_BUILD_DIR)/%.o,$(ATARI_SRCS))
+ATARIST_OBJS = $(patsubst src/%.c,$(ATARIST_BUILD_DIR)/%.o,$(ATARIST_SRCS))
 
 .PHONY: atarist atari
-atarist: $(ATARI_BUILD_DIR)/libsolo.a
+atarist: $(ATARIST_BUILD_DIR)/libsolo.a
 atari: atarist
 
-$(ATARI_BUILD_DIR)/libsolo.a: $(ATARI_OBJS)
+$(ATARIST_BUILD_DIR)/libsolo.a: $(ATARIST_OBJS)
 	@mkdir -p $(dir $@)
-	$(ATARI_AR) rcs $@ $^
-	$(ATARI_RANLIB) $@
+	$(ATARIST_AR) rcs $@ $^
+	$(ATARIST_RANLIB) $@
 	@echo "==> Built Atari ST static library: $@"
 
-$(ATARI_BUILD_DIR)/%.o: src/%.c
+$(ATARIST_BUILD_DIR)/%.o: src/%.c
 	@mkdir -p $(dir $@)
-	$(ATARI_CC) $(ATARI_CFLAGS) -c $< -o $@
+	$(ATARIST_CC) $(ATARIST_CFLAGS) -c $< -o $@

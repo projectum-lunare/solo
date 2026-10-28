@@ -7,7 +7,17 @@ EVC3_DIR ?= $(HOME)/.local/opt/evc3
 WINCE_BUILD_DIR ?= build/windows_ce
 WINCE_AR        ?= ar
 
-WINCE_COMMON_CFLAGS = -c -nologo -O2 -Iinclude -I$(EVC3_DIR)/include -D_WIN32_WCE=211 -DUNDER_CE=211
+ALL_MODULES ?= platform filesystem parallel serial socket sandbox
+MODULES     ?= $(ALL_MODULES)
+SOLO_MODULE_DEFS ?= \
+    $(if $(filter platform,$(MODULES)),,-DSOLO_NO_PLATFORM) \
+    $(if $(filter filesystem,$(MODULES)),,-DSOLO_NO_FILESYSTEM) \
+    $(if $(filter parallel,$(MODULES)),,-DSOLO_NO_PARALLEL) \
+    $(if $(filter serial,$(MODULES)),,-DSOLO_NO_SERIAL) \
+    $(if $(filter socket,$(MODULES)),,-DSOLO_NO_SOCKET) \
+    $(if $(filter sandbox,$(MODULES)),,-DSOLO_NO_SANDBOX)
+
+WINCE_COMMON_CFLAGS = -c -nologo -O2 -Iinclude -I$(EVC3_DIR)/include -D_WIN32_WCE=211 -DUNDER_CE=211 $(SOLO_MODULE_DEFS)
 
 # Architecture compilers & CFLAGS
 WINCE_ARM_CC      ?= $(WIBO_BIN) $(EVC3_DIR)/bin/clarm.exe
@@ -30,12 +40,12 @@ WINCE_X86_CFLAGS  ?= $(WINCE_COMMON_CFLAGS) -Dx86 -D_X86_ -D_WIN32_WCE_EMULATION
 
 WINCE_SRCS = \
     src/solo.c \
-    src/platform/platform.c \
-    src/filesystem/filesystem.c \
-    src/parallel/parallel_windows_ce.c \
-    src/serial/serial_windows_ce.c \
-    src/socket/socket_windows_ce.c \
-    src/sandbox/sandbox_stub.c
+    $(if $(filter platform,$(MODULES)),src/platform/platform.c) \
+    $(if $(filter filesystem,$(MODULES)),src/filesystem/filesystem.c) \
+    $(if $(filter parallel,$(MODULES)),src/parallel/parallel_windows_ce.c) \
+    $(if $(filter serial,$(MODULES)),src/serial/serial_windows_ce.c) \
+    $(if $(filter socket,$(MODULES)),src/socket/socket_windows_ce.c) \
+    $(if $(filter sandbox,$(MODULES)),src/sandbox/sandbox_stub.c)
 
 define WINCE_RULES
 WINCE_$(1)_OBJS = $$(patsubst src/%.c,$$(WINCE_BUILD_DIR)/$(1)/%.obj,$$(WINCE_SRCS))

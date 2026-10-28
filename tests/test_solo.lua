@@ -3,7 +3,7 @@
 -- Copyright (C) 2026 Gustavo Veiga <gustavo.veiga@outlook.com.br>
 -- Mozilla Public License Version 2.0
 
-package.cpath = "./?.so;./?.dylib;./?.dll;" .. package.cpath
+package.cpath = "./build/lua/?.so;./build/lua/?/init.so;./?.so;./?.dylib;./?.dll;" .. package.cpath
 
 local solo = require("solo")
 
@@ -256,6 +256,28 @@ to_client:close()
 to_acc:close()
 to_server:close()
 print("    ✓ Socket Timeouts passed!")
+
+-- 6. Test Standalone Submodules (Modular loading without 'solo' umbrella)
+print("\n[6] Testing Standalone Submodules (independent .so loading)...")
+local standalone_p = require("solo.platform")
+assert(type(standalone_p.os) == "string", "solo.platform standalone must work")
+assert(standalone_p.os == p.os, "standalone platform must match umbrella platform")
+
+local standalone_s = require("solo.serial")
+assert(type(standalone_s.open) == "function", "solo.serial standalone must work")
+
+local standalone_sock = require("solo.socket")
+assert(type(standalone_sock.connect) == "function", "solo.socket standalone must work")
+
+local standalone_fs = require("solo.fs")
+assert(type(standalone_fs.exists) == "function", "solo.fs standalone must work")
+
+local standalone_par = require("solo.parallel")
+assert(type(standalone_par.open) == "function", "solo.parallel standalone must work")
+
+local standalone_sbx = require("solo.sandbox")
+assert(type(standalone_sbx.is_supported) == "function", "solo.sandbox standalone must work")
+print("    ✓ All standalone submodules successfully loaded independently!")
 
 print("\n========================================")
 print(">>> ALL LUA TESTS PASSED SUCCESSFULLY! <<<")

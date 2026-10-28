@@ -6,16 +6,26 @@ PLAN9_CC     ?= gcc
 PLAN9_AR     ?= ar
 PLAN9_RANLIB ?= ranlib
 
-PLAN9_CFLAGS ?= -Wall -Wextra -O2 -std=c89 -D_PLAN9_SOURCE -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -Iinclude
+ALL_MODULES ?= platform filesystem parallel serial socket sandbox
+MODULES     ?= $(ALL_MODULES)
+SOLO_MODULE_DEFS ?= \
+    $(if $(filter platform,$(MODULES)),,-DSOLO_NO_PLATFORM) \
+    $(if $(filter filesystem,$(MODULES)),,-DSOLO_NO_FILESYSTEM) \
+    $(if $(filter parallel,$(MODULES)),,-DSOLO_NO_PARALLEL) \
+    $(if $(filter serial,$(MODULES)),,-DSOLO_NO_SERIAL) \
+    $(if $(filter socket,$(MODULES)),,-DSOLO_NO_SOCKET) \
+    $(if $(filter sandbox,$(MODULES)),,-DSOLO_NO_SANDBOX)
+
+PLAN9_CFLAGS ?= -Wall -Wextra -O2 -std=c89 -D_PLAN9_SOURCE -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE $(SOLO_MODULE_DEFS) -Iinclude
 
 PLAN9_SRCS = \
     src/solo.c \
-    src/platform/platform.c \
-    src/filesystem/filesystem.c \
-    src/parallel/parallel_plan9.c \
-    src/serial/serial_plan9.c \
-    src/socket/socket_plan9.c \
-    src/sandbox/sandbox_stub.c
+    $(if $(filter platform,$(MODULES)),src/platform/platform.c) \
+    $(if $(filter filesystem,$(MODULES)),src/filesystem/filesystem.c) \
+    $(if $(filter parallel,$(MODULES)),src/parallel/parallel_plan9.c) \
+    $(if $(filter serial,$(MODULES)),src/serial/serial_plan9.c) \
+    $(if $(filter socket,$(MODULES)),src/socket/socket_plan9.c) \
+    $(if $(filter sandbox,$(MODULES)),src/sandbox/sandbox_stub.c)
 
 PLAN9_OBJS = $(patsubst src/%.c,$(PLAN9_BUILD_DIR)/%.o,$(PLAN9_SRCS))
 

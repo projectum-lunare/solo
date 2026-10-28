@@ -16,7 +16,31 @@ LIBFLAG ?= -shared
 LDLIBS  ?=
 
 .DEFAULT_GOAL := all
-.PHONY: all static lua test install clean check-all all-platforms
+.PHONY: all static lua modules test install clean check-all all-platforms
+
+# Modular subsystem selection (default: all)
+ALL_MODULES = platform filesystem parallel serial socket sandbox
+MODULES    ?= $(ALL_MODULES)
+
+# Feature flags for CFLAGS based on excluded modules
+ifeq ($(filter platform,$(MODULES)),)
+    CFLAGS += -DSOLO_NO_PLATFORM
+endif
+ifeq ($(filter filesystem,$(MODULES)),)
+    CFLAGS += -DSOLO_NO_FILESYSTEM
+endif
+ifeq ($(filter parallel,$(MODULES)),)
+    CFLAGS += -DSOLO_NO_PARALLEL
+endif
+ifeq ($(filter serial,$(MODULES)),)
+    CFLAGS += -DSOLO_NO_SERIAL
+endif
+ifeq ($(filter socket,$(MODULES)),)
+    CFLAGS += -DSOLO_NO_SOCKET
+endif
+ifeq ($(filter sandbox,$(MODULES)),)
+    CFLAGS += -DSOLO_NO_SANDBOX
+endif
 
 # Modular platform targets
 -include mk/*.mk
@@ -25,31 +49,81 @@ LDLIBS  ?=
 LIB_STATIC = $(POSIX_BUILD_DIR)/libsolo.a
 LUA_MOD    = solo.$(SO_EXT)
 
-LUA_SRCS = $(wildcard src/*/*_lua.c) src/solo_lua.c
-PIC_OBJS = $(patsubst src/%.c,build/pic/%.o,$(POSIX_SRCS) $(LUA_SRCS))
+LUA_CORE_SRCS = \
+    $(if $(filter platform,$(MODULES)),src/platform/platform_lua.c) \
+    $(if $(filter filesystem,$(MODULES)),src/filesystem/filesystem_lua.c) \
+    $(if $(filter parallel,$(MODULES)),src/parallel/parallel_lua.c) \
+    $(if $(filter serial,$(MODULES)),src/serial/serial_lua.c) \
+    $(if $(filter socket,$(MODULES)),src/socket/socket_lua.c) \
+    $(if $(filter sandbox,$(MODULES)),src/sandbox/sandbox_lua.c) \
+    src/solo_lua.c
 
-all: static lua
+PIC_OBJS = $(patsubst src/%.c,build/pic/%.o,$(POSIX_SRCS) $(LUA_CORE_SRCS))
+
+# Standalone Lua submodules
+MOD_DIR = build/lua/solo
+LUA_SUBMODULES = \
+    $(if $(filter platform,$(MODULES)),$(MOD_DIR)/platform.$(SO_EXT)) \
+    $(if $(filter filesystem,$(MODULES)),$(MOD_DIR)/filesystem.$(SO_EXT) $(MOD_DIR)/fs.$(SO_EXT)) \
+    $(if $(filter parallel,$(MODULES)),$(MOD_DIR)/parallel.$(SO_EXT)) \
+    $(if $(filter serial,$(MODULES)),$(MOD_DIR)/serial.$(SO_EXT)) \
+    $(if $(filter socket,$(MODULES)),$(MOD_DIR)/socket.$(SO_EXT)) \
+    $(if $(filter sandbox,$(MODULES)),$(MOD_DIR)/sandbox.$(SO_EXT))
+
+all: static lua modules
 static: $(LIB_STATIC)
 lua: $(LUA_MOD)
+modules: $(LUA_SUBMODULES)
 
+# Umbrella Lua module
 $(LUA_MOD): $(PIC_OBJS)
 	$(CC) $(LIBFLAG) $(CFLAGS) -o $@ $^ $(LDLIBS)
+
+# Standalone Lua submodules
+$(MOD_DIR)/platform.$(SO_EXT): build/pic/platform/platform_lua.o build/pic/platform/platform.o
+	@mkdir -p $(dir $@)
+	$(CC) $(LIBFLAG) $(CFLAGS) -o $@ $^
+
+$(MOD_DIR)/filesystem.$(SO_EXT): build/pic/filesystem/filesystem_lua.o build/pic/filesystem/filesystem.o build/pic/platform/platform.o
+	@mkdir -p $(dir $@)
+	$(CC) $(LIBFLAG) $(CFLAGS) -o $@ $^
+
+$(MOD_DIR)/fs.$(SO_EXT): $(MOD_DIR)/filesystem.$(SO_EXT)
+	@mkdir -p $(dir $@)
+	@cp $< $@
+
+$(MOD_DIR)/parallel.$(SO_EXT): build/pic/parallel/parallel_lua.o build/pic/parallel/parallel_posix.o build/pic/platform/platform.o
+	@mkdir -p $(dir $@)
+	$(CC) $(LIBFLAG) $(CFLAGS) -o $@ $^
+
+$(MOD_DIR)/serial.$(SO_EXT): build/pic/serial/serial_lua.o build/pic/serial/serial_posix.o build/pic/platform/platform.o
+	@mkdir -p $(dir $@)
+	$(CC) $(LIBFLAG) $(CFLAGS) -o $@ $^
+
+$(MOD_DIR)/socket.$(SO_EXT): build/pic/socket/socket_lua.o build/pic/socket/socket_posix.o build/pic/platform/platform.o
+	@mkdir -p $(dir $@)
+	$(CC) $(LIBFLAG) $(CFLAGS) -o $@ $^ $(LDLIBS)
+
+$(MOD_DIR)/sandbox.$(SO_EXT): build/pic/sandbox/sandbox_lua.o $(patsubst src/%.c,build/pic/%.o,$(POSIX_SANDBOX_BACKEND)) build/pic/platform/platform.o
+	@mkdir -p $(dir $@)
+	$(CC) $(LIBFLAG) $(CFLAGS) -o $@ $^
 
 build/pic/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -fPIC $(INCLUDES) -c $< -o $@
 
-test: $(LUA_MOD) $(LIB_STATIC)
+test: $(LUA_MOD) $(LIB_STATIC) $(LUA_SUBMODULES)
 	@echo "==> Building C unit tests..."
 	$(CC) $(CFLAGS) $(INCLUDES) tests/test_c_api.c $(LIB_STATIC) -o tests/test_c_api $(LDLIBS)
 	@echo "==> Running C unit tests..."
 	./tests/test_c_api
-	@echo "==> Running Lua test suite..."
+	@echo "==> Running Lua test suite (umbrella & standalone modules)..."
 	$(LUA) tests/test_solo.lua
 
-install: $(LUA_MOD)
-	@mkdir -p $(DESTDIR)$(INST_LIBDIR)
+install: $(LUA_MOD) $(LUA_SUBMODULES)
+	@mkdir -p $(DESTDIR)$(INST_LIBDIR)/solo
 	cp $(LUA_MOD) $(DESTDIR)$(INST_LIBDIR)/
+	cp $(LUA_SUBMODULES) $(DESTDIR)$(INST_LIBDIR)/solo/
 
 clean:
 	rm -f $(LUA_MOD) libsolo.* tests/test_c_api

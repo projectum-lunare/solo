@@ -19,14 +19,17 @@ else
     POSIX_SANDBOX_BACKEND = src/sandbox/sandbox_stub.c
 endif
 
+ALL_MODULES ?= platform filesystem parallel serial socket sandbox
+MODULES     ?= $(ALL_MODULES)
+
 POSIX_SRCS = \
     src/solo.c \
-    src/platform/platform.c \
-    src/filesystem/filesystem.c \
-    src/parallel/parallel_posix.c \
-    src/serial/serial_posix.c \
-    src/socket/socket_posix.c \
-    $(POSIX_SANDBOX_BACKEND)
+    $(if $(filter platform,$(MODULES)),src/platform/platform.c) \
+    $(if $(filter filesystem,$(MODULES)),src/filesystem/filesystem.c) \
+    $(if $(filter parallel,$(MODULES)),src/parallel/parallel_posix.c) \
+    $(if $(filter serial,$(MODULES)),src/serial/serial_posix.c) \
+    $(if $(filter socket,$(MODULES)),src/socket/socket_posix.c) \
+    $(if $(filter sandbox,$(MODULES)),$(POSIX_SANDBOX_BACKEND))
 
 POSIX_OBJS = $(patsubst src/%.c,$(POSIX_BUILD_DIR)/%.o,$(POSIX_SRCS))
 
