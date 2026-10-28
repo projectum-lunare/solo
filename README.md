@@ -213,7 +213,7 @@ Modular platform fragments are located in `mk/*.mk` and output platform static l
 make posix         # build/posix/libsolo.a
 make dos           # build/dos/libsolo.lib (Open Watcom + WATT-32)
 make os2           # build/os2/libsolo.lib (Open Watcom OS/2)
-make winnt         # build/windows_nt/libsolo.lib (Open Watcom Win32)
+make winnt         # build/windows_nt/libsolo.a (VC4: Alpha, MIPS, PPC, x86; MinGW: x86, ARM)
 make wince         # build/windows_ce/libsolo.a (eVC 3.0: ARM, MIPS, PPC, SH-3, SH-4, x86)
 make amiga         # build/amiga/libsolo.a (m68k-amigaos-gcc)
 make atarist       # build/atarist/libsolo.a (m68k-atari-mint-gcc)
