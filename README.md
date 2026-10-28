@@ -187,7 +187,7 @@ make posix         # build/posix/libsolo.a
 make dos           # build/dos/libsolo.lib (Open Watcom + WATT-32)
 make os2           # build/os2/libsolo.lib (Open Watcom OS/2)
 make winnt         # build/windows_nt/libsolo.lib (Open Watcom Win32)
-make wince         # build/windows_ce/libsolo.a (MS eVC 3.0 ARM)
+make wince         # build/windows_ce/libsolo.a (eVC 3.0: ARM, MIPS, PPC, SH-3, SH-4, x86)
 make amiga         # build/amiga/libsolo.a (m68k-amigaos-gcc)
 make atarist       # build/atarist/libsolo.a (m68k-atari-mint-gcc)
 make kolibri       # build/kolibri/libsolo.a (kos32-gcc)
