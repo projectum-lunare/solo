@@ -23,10 +23,10 @@
 extern "C" {
 #endif
 
-#define SOLO_VERSION_MAJOR 1
-#define SOLO_VERSION_MINOR 0
+#define SOLO_VERSION_MAJOR 0
+#define SOLO_VERSION_MINOR 1
 #define SOLO_VERSION_PATCH 0
-#define SOLO_VERSION_STRING "1.0.0"
+#define SOLO_VERSION_STRING "0.1.0"
 
 /*
  * Returns the version string of the solo runtime foundation.
