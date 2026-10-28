@@ -8,7 +8,7 @@ AR ?= ar
 RANLIB ?= ranlib
 LUA ?= lua
 
-CFLAGS ?= -Wall -Wextra -O2 -std=c99
+CFLAGS ?= -Wall -Wextra -O2 -std=c89 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
 INCLUDES = -Iinclude -Ivendor/lua
 
 # Detect OS
