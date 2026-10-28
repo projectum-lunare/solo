@@ -1,0 +1,155 @@
+/*
+ * solo - Physical I/O, System Foundations & Hardware Abstractions
+ * Projectum Lunare <https://github.com/projectum-lunare/solo>
+ * Copyright (C) 2026 Gustavo Veiga <gustavo.veiga@outlook.com.br>
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+#include <solo/platform.h>
+
+#if SOLO_IS_AMIGA
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <solo/parallel.h>
+
+#include <exec/types.h>
+#include <exec/ports.h>
+#include <exec/io.h>
+#include <devices/parallel.h>
+#include <proto/exec.h>
+
+struct parallel_port {
+    struct MsgPort *mp;
+    struct IOExtPar *io;
+    int is_open;
+};
+
+solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
+{
+    char dev_name[64];
+    ULONG unit = 0;
+    const char *colon;
+    struct MsgPort *mp = NULL;
+    struct IOExtPar *io = NULL;
+    solo_parallel_t *port = NULL;
+    BYTE open_err;
+
+    if (path == NULL || path[0] == '\0') {
+        strncpy(dev_name, "parallel.device", sizeof(dev_name) - 1);
+        dev_name[sizeof(dev_name) - 1] = '\0';
+        unit = 0;
+    } else {
+        colon = strchr(path, ':');
+        if (colon != NULL) {
+            size_t len = (size_t)(colon - path);
+            if (len >= sizeof(dev_name))
+                len = sizeof(dev_name) - 1;
+            memcpy(dev_name, path, len);
+            dev_name[len] = '\0';
+            unit = (ULONG)atoi(colon + 1);
+        } else {
+            strncpy(dev_name, path, sizeof(dev_name) - 1);
+            dev_name[sizeof(dev_name) - 1] = '\0';
+            unit = 0;
+        }
+    }
+
+    mp = CreateMsgPort();
+    if (mp == NULL) {
+        if (err_msg)
+            *err_msg = safe_strdup("CreateMsgPort() failed");
+        return NULL;
+    }
+
+    io = (struct IOExtPar *)CreateIORequest(mp, sizeof(struct IOExtPar));
+    if (io == NULL) {
+        DeleteMsgPort(mp);
+        if (err_msg)
+            *err_msg = safe_strdup("CreateIORequest() failed");
+        return NULL;
+    }
+
+    open_err = OpenDevice((CONST_STRPTR)dev_name, unit, (struct IORequest *)io, 0);
+    if (open_err != 0) {
+        if (err_msg) {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "OpenDevice(%s, %lu) failed (error %d)", dev_name, unit,
+                     (int)open_err);
+            *err_msg = safe_strdup(buf);
+        }
+        DeleteIORequest((struct IORequest *)io);
+        DeleteMsgPort(mp);
+        return NULL;
+    }
+
+    port = (solo_parallel_t *)malloc(sizeof(solo_parallel_t));
+    if (port == NULL) {
+        CloseDevice((struct IORequest *)io);
+        DeleteIORequest((struct IORequest *)io);
+        DeleteMsgPort(mp);
+        if (err_msg)
+            *err_msg = safe_strdup("Memory allocation failure");
+        return NULL;
+    }
+
+    port->mp = mp;
+    port->io = io;
+    port->is_open = 1;
+
+    return port;
+}
+
+int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
+{
+    if (port == NULL || port->io == NULL || buf == NULL || !port->is_open) {
+        return -1;
+    }
+
+    port->io->IOPar.io_Command = CMD_WRITE;
+    port->io->IOPar.io_Data = (APTR)buf;
+    port->io->IOPar.io_Length = (ULONG)len;
+
+    if (DoIO((struct IORequest *)port->io) != 0) {
+        return -1;
+    }
+
+    return (int)len;
+}
+
+int solo_parallel_drain(solo_parallel_t *port)
+{
+    if (port == NULL || port->io == NULL || !port->is_open) {
+        return -1;
+    }
+    return 0;
+}
+
+void solo_parallel_close(solo_parallel_t *port)
+{
+    if (port != NULL) {
+        if (port->is_open && port->io != NULL) {
+            CloseDevice((struct IORequest *)port->io);
+            port->is_open = 0;
+        }
+        if (port->io != NULL) {
+            DeleteIORequest((struct IORequest *)port->io);
+            port->io = NULL;
+        }
+        if (port->mp != NULL) {
+            DeleteMsgPort(port->mp);
+            port->mp = NULL;
+        }
+        free(port);
+    }
+}
+
+#else
+/* ISO C forbids an empty translation unit */
+typedef int make_iso_compilers_happy_parallel_amiga;
+#endif /* SOLO_IS_AMIGA */

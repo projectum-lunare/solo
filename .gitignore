@@ -1,0 +1,18 @@
+# Build artifacts
+*.o
+*.pic.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Test binaries
+tests/test_c_api
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
