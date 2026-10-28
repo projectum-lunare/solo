@@ -9,7 +9,26 @@ RANLIB ?= ranlib
 LUA    ?= lua
 
 CFLAGS ?= -Wall -Wextra -O2 -std=c89 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
-INCLUDES = -Iinclude $(if $(LUA_INCDIR),-I$(LUA_INCDIR),-Ivendor/lua)
+
+# Lua 5.4+ include directory resolution (searches custom LUA_INCDIR, parent/sibling repos, system Lua 5.5/5.4)
+LUA_SEARCH_DIRS = \
+    $(LUA_INCDIR) \
+    ../vendor/lua \
+    ../lua \
+    ../../vendor/lua \
+    ../dotstar/vendor/lua \
+    /usr/include/lua5.5 \
+    /usr/include/lua55 \
+    /usr/include/lua-5.5 \
+    /usr/local/include/lua5.5 \
+    /usr/include/lua5.4 \
+    /usr/include/lua54 \
+    /usr/include/lua-5.4 \
+    /usr/local/include/lua5.4 \
+    /usr/include/lua
+
+RESOLVED_LUA_INCDIR := $(firstword $(foreach d,$(LUA_SEARCH_DIRS),$(if $(wildcard $(d)/lua.h),$(d))))
+INCLUDES = -Iinclude $(if $(RESOLVED_LUA_INCDIR),-I$(RESOLVED_LUA_INCDIR))
 
 SO_EXT  ?= so
 LIBFLAG ?= -shared

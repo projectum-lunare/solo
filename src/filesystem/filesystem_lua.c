@@ -26,16 +26,16 @@ static const luaL_Reg fs_funcs[] = {
     {NULL, NULL}
 };
 
-LUAMOD_API int luaopen_solo_filesystem(lua_State *L);
-LUAMOD_API int luaopen_solo_fs(lua_State *L);
+int luaopen_solo_filesystem(lua_State *L);
+int luaopen_solo_fs(lua_State *L);
 
-LUAMOD_API int luaopen_solo_filesystem(lua_State *L)
+int luaopen_solo_filesystem(lua_State *L)
 {
     luaL_newlib(L, fs_funcs);
     return 1;
 }
 
-LUAMOD_API int luaopen_solo_fs(lua_State *L)
+int luaopen_solo_fs(lua_State *L)
 {
     return luaopen_solo_filesystem(L);
 }

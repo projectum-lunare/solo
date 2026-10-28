@@ -5,7 +5,7 @@
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-blue.svg)](https://mozilla.org/MPL/2.0/)
 [![Language: ANSI C89](https://img.shields.io/badge/C-ANSI_C89-brightgreen.svg)]()
-[![Lua: 5.1-5.5](https://img.shields.io/badge/Lua-5.1_--_5.5-blue.svg)]()
+[![Lua: 5.4-5.5](https://img.shields.io/badge/Lua-5.4_--_5.5-blue.svg)]()
 
 `solo` is a portable, zero-bloat system foundation library written in strict ANSI C (C89 / ISO C90) with first-class Lua bindings. It bridges hardware I/O, network communication, physical ports, persistent filesystems, and kernel-level sandboxing across **10 distinct operating system families** — from vintage platforms of the 1990s (DOS, Amiga, Windows CE, Atari ST) to modern POSIX workstations in 2026.
 

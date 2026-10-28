@@ -21,9 +21,9 @@
     } while (0)
 
 
-LUAMOD_API int luaopen_solo_platform(lua_State *L);
+int luaopen_solo_platform(lua_State *L);
 
-LUAMOD_API int luaopen_solo_platform(lua_State *L)
+int luaopen_solo_platform(lua_State *L)
 {
     lua_newtable(L);
 

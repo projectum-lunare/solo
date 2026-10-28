@@ -117,9 +117,9 @@ static const luaL_Reg sandbox_funcs[] = {
     {NULL,           NULL                 }
 };
 
-LUAMOD_API int luaopen_solo_sandbox(lua_State *L);
+int luaopen_solo_sandbox(lua_State *L);
 
-LUAMOD_API int luaopen_solo_sandbox(lua_State *L)
+int luaopen_solo_sandbox(lua_State *L)
 {
     luaL_newlib(L, sandbox_funcs);
     return 1;
