@@ -1,11 +1,14 @@
 # Build artifacts
 *.o
 *.pic.o
+*.obj
 *.a
+*.lib
 *.so
 *.dylib
 *.dll
 *.exe
+build/
 
 # Test binaries
 tests/test_c_api

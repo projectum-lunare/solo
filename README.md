@@ -177,6 +177,27 @@ make test
 make clean
 ```
 
+### Cross-Platform Multi-Target Builds
+
+Modular platform fragments are located in `mk/*.mk` and output platform static libraries to `build/<platform>/`:
+
+```bash
+# Build a specific platform library:
+make posix         # build/posix/libsolo.a
+make dos           # build/dos/libsolo.lib (Open Watcom + WATT-32)
+make os2           # build/os2/libsolo.lib (Open Watcom OS/2)
+make winnt         # build/windows_nt/libsolo.lib (Open Watcom Win32)
+make wince         # build/windows_ce/libsolo.a (MS eVC 3.0 ARM)
+make amiga         # build/amiga/libsolo.a (m68k-amigaos-gcc)
+make atarist       # build/atarist/libsolo.a (m68k-atari-mint-gcc)
+make kolibri       # build/kolibri/libsolo.a (kos32-gcc)
+make plan9         # build/plan9/libsolo.a (Plan 9 GCC)
+make stub          # build/stub/libsolo.a (Generic ANSI C89)
+
+# Build all 10 platform libraries at once:
+make check-all
+```
+
 ### LuaRocks Installation
 
 ```bash

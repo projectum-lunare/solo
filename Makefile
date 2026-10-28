@@ -3,103 +3,40 @@
 # Copyright (C) 2026 Gustavo Veiga <gustavo.veiga@outlook.com.br>
 # Mozilla Public License Version 2.0
 
-CC ?= gcc
-AR ?= ar
+CC     ?= gcc
+AR     ?= ar
 RANLIB ?= ranlib
-LUA ?= lua
+LUA    ?= lua
 
 CFLAGS ?= -Wall -Wextra -O2 -std=c89 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
-INCLUDES = -Iinclude -Ivendor/lua
+INCLUDES = -Iinclude $(if $(LUA_INCDIR),-I$(LUA_INCDIR),-Ivendor/lua)
 
-# Detect OS
-UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
+SO_EXT  ?= so
+LIBFLAG ?= -shared
+LDLIBS  ?=
 
-ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
-    PLATFORM = windows_nt
-    SO_EXT = dll
-    LDFLAGS_SHARED = -shared
-    LDLIBS = -lws2_32
-else ifeq ($(findstring MSYS,$(UNAME_S)),MSYS)
-    PLATFORM = windows_nt
-    SO_EXT = dll
-    LDFLAGS_SHARED = -shared
-    LDLIBS = -lws2_32
-else ifeq ($(UNAME_S),Darwin)
-    PLATFORM = posix
-    SO_EXT = dylib
-    LDFLAGS_SHARED = -dynamiclib -undefined dynamic_lookup
-    LDLIBS =
-else
-    PLATFORM = posix
-    SO_EXT = so
-    LDFLAGS_SHARED = -shared
-    LDLIBS =
-endif
+.DEFAULT_GOAL := all
+.PHONY: all static lua test install clean check-all all-platforms
 
-# Sandbox backend selection
-ifeq ($(UNAME_S),Linux)
-    SANDBOX_BACKEND = src/sandbox/sandbox_linux.c
-else ifeq ($(UNAME_S),OpenBSD)
-    SANDBOX_BACKEND = src/sandbox/sandbox_openbsd.c
-else ifeq ($(UNAME_S),FreeBSD)
-    SANDBOX_BACKEND = src/sandbox/sandbox_freebsd.c
-else
-    SANDBOX_BACKEND = src/sandbox/sandbox_stub.c
-endif
+# Modular platform targets
+-include mk/*.mk
 
-# C Core Sources
-CORE_SRCS = \
-    src/solo.c \
-    src/platform/platform.c \
-    src/filesystem/filesystem.c \
-    src/parallel/parallel_$(PLATFORM).c \
-    src/serial/serial_$(PLATFORM).c \
-    src/socket/socket_$(PLATFORM).c \
-    $(SANDBOX_BACKEND)
+# Host targets
+LIB_STATIC = $(POSIX_BUILD_DIR)/libsolo.a
+LUA_MOD    = solo.$(SO_EXT)
 
-# Lua Binding Sources
-LUA_SRCS = \
-    src/platform/platform_lua.c \
-    src/filesystem/filesystem_lua.c \
-    src/parallel/parallel_lua.c \
-    src/serial/serial_lua.c \
-    src/socket/socket_lua.c \
-    src/sandbox/sandbox_lua.c \
-    src/solo_lua.c
+LUA_SRCS = $(wildcard src/*/*_lua.c) src/solo_lua.c
+PIC_OBJS = $(patsubst src/%.c,build/pic/%.o,$(POSIX_SRCS) $(LUA_SRCS))
 
-CORE_OBJS = $(CORE_SRCS:.c=.o)
-CORE_PIC_OBJS = $(CORE_SRCS:.c=.pic.o)
-LUA_PIC_OBJS = $(LUA_SRCS:.c=.pic.o)
-
-LIB_STATIC = libsolo.a
-LIB_SHARED = libsolo.$(SO_EXT)
-LUA_MOD = solo.$(SO_EXT)
-
-.PHONY: all static shared lua test clean install
-
-all: static shared lua
-
+all: static lua
 static: $(LIB_STATIC)
-shared: $(LIB_SHARED)
 lua: $(LUA_MOD)
 
-# Static library
-$(LIB_STATIC): $(CORE_OBJS)
-	$(AR) rcs $@ $^
-	$(RANLIB) $@
+$(LUA_MOD): $(PIC_OBJS)
+	$(CC) $(LIBFLAG) $(CFLAGS) -o $@ $^ $(LDLIBS)
 
-# Shared C library
-$(LIB_SHARED): $(CORE_PIC_OBJS)
-	$(CC) $(LDFLAGS_SHARED) $(CFLAGS) -o $@ $^ $(LDLIBS)
-
-# Lua C module (solo.so)
-$(LUA_MOD): $(CORE_PIC_OBJS) $(LUA_PIC_OBJS)
-	$(CC) $(LDFLAGS_SHARED) $(CFLAGS) -o $@ $^ $(LDLIBS)
-
-%.o: %.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
-
-%.pic.o: %.c
+build/pic/%.o: src/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -fPIC $(INCLUDES) -c $< -o $@
 
 test: $(LUA_MOD) $(LIB_STATIC)
@@ -110,7 +47,17 @@ test: $(LUA_MOD) $(LIB_STATIC)
 	@echo "==> Running Lua test suite..."
 	$(LUA) tests/test_solo.lua
 
+install: $(LUA_MOD)
+	@mkdir -p $(DESTDIR)$(INST_LIBDIR)
+	cp $(LUA_MOD) $(DESTDIR)$(INST_LIBDIR)/
+
 clean:
-	rm -f $(CORE_OBJS) $(CORE_PIC_OBJS) $(LUA_PIC_OBJS)
-	rm -f $(LIB_STATIC) $(LIB_SHARED) $(LUA_MOD)
-	rm -f tests/test_c_api /tmp/solo.so
+	rm -f $(LUA_MOD) libsolo.* tests/test_c_api
+	rm -rf build/
+
+check-all: posix dos os2 winnt wince amiga atarist kolibri plan9 stub
+	@echo "=========================================================="
+	@echo " All 10 platforms built successfully!"
+	@echo "=========================================================="
+
+all-platforms: check-all
