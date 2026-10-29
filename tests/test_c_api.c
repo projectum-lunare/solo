@@ -633,6 +633,75 @@ TEST test_sandbox_unsupported(void)
     PASS();
 }
 
+TEST test_serial_enums(void)
+{
+    solo_serial_opts_t opts;
+    ASSERT_EQ(0, SOLO_SERIAL_OK);
+    ASSERT_EQ(-1, SOLO_SERIAL_ERROR);
+    ASSERT_EQ(-2, SOLO_SERIAL_UNSUPPORTED);
+
+    ASSERT_EQ(0, SOLO_SERIAL_FLOW_NONE);
+    ASSERT_EQ(1, SOLO_SERIAL_FLOW_HARDWARE);
+    ASSERT_EQ(2, SOLO_SERIAL_FLOW_SOFTWARE);
+
+    ASSERT_EQ('n', SOLO_SERIAL_PARITY_NONE);
+    ASSERT_EQ('e', SOLO_SERIAL_PARITY_EVEN);
+    ASSERT_EQ('o', SOLO_SERIAL_PARITY_ODD);
+    ASSERT_EQ('m', SOLO_SERIAL_PARITY_MARK);
+    ASSERT_EQ('s', SOLO_SERIAL_PARITY_SPACE);
+
+    ASSERT_EQ(1, SOLO_SERIAL_STOP_1);
+    ASSERT_EQ(2, SOLO_SERIAL_STOP_2);
+
+    ASSERT_EQ(5, SOLO_SERIAL_DATA_5);
+    ASSERT_EQ(6, SOLO_SERIAL_DATA_6);
+    ASSERT_EQ(7, SOLO_SERIAL_DATA_7);
+    ASSERT_EQ(8, SOLO_SERIAL_DATA_8);
+
+    ASSERT_EQ(9600, SOLO_SERIAL_BAUD_9600);
+    ASSERT_EQ(115200, SOLO_SERIAL_BAUD_115200);
+
+    ASSERT_EQ(-1, SOLO_SERIAL_LINE_IGNORE);
+    ASSERT_EQ(0, SOLO_SERIAL_LINE_OFF);
+    ASSERT_EQ(1, SOLO_SERIAL_LINE_ON);
+
+    opts.baud = SOLO_SERIAL_BAUD_115200;
+    opts.data_bits = SOLO_SERIAL_DATA_8;
+    opts.parity = SOLO_SERIAL_PARITY_NONE;
+    opts.stop_bits = SOLO_SERIAL_STOP_1;
+    opts.flow_control = SOLO_SERIAL_FLOW_HARDWARE;
+    opts.rts = SOLO_SERIAL_LINE_ON;
+    opts.dtr = SOLO_SERIAL_LINE_ON;
+
+    ASSERT_EQ(115200, opts.baud);
+    ASSERT_EQ(8, opts.data_bits);
+    ASSERT_EQ('n', opts.parity);
+
+    ASSERT_EQ(SOLO_SERIAL_ERROR, solo_serial_set_rts(NULL, SOLO_SERIAL_LINE_ON));
+    ASSERT_EQ(SOLO_SERIAL_ERROR, solo_serial_set_dtr(NULL, SOLO_SERIAL_LINE_OFF));
+    PASS();
+}
+
+TEST test_parallel_enums(void)
+{
+    ASSERT_EQ(0, SOLO_PARALLEL_OK);
+    ASSERT_EQ(-1, SOLO_PARALLEL_ERROR);
+    ASSERT_EQ(-2, SOLO_PARALLEL_UNSUPPORTED);
+
+    ASSERT_EQ(0, SOLO_PARALLEL_MODE_SPP);
+    ASSERT_EQ(1, SOLO_PARALLEL_MODE_NIBBLE);
+    ASSERT_EQ(2, SOLO_PARALLEL_MODE_BYTE);
+    ASSERT_EQ(3, SOLO_PARALLEL_MODE_EPP);
+    ASSERT_EQ(4, SOLO_PARALLEL_MODE_ECP);
+
+    ASSERT_EQ(1 << 0, SOLO_PARALLEL_PIN_BUSY);
+    ASSERT_EQ(1 << 1, SOLO_PARALLEL_PIN_ACK);
+    ASSERT_EQ(1 << 2, SOLO_PARALLEL_PIN_PE);
+    ASSERT_EQ(1 << 3, SOLO_PARALLEL_PIN_SLCT);
+    ASSERT_EQ(1 << 4, SOLO_PARALLEL_PIN_FAULT);
+    PASS();
+}
+
 SUITE(c_api_suite)
 {
     RUN_TEST(test_platform);
@@ -640,6 +709,8 @@ SUITE(c_api_suite)
     RUN_TEST(test_sandbox);
     RUN_TEST(test_sandbox_enums);
     RUN_TEST(test_sandbox_unsupported);
+    RUN_TEST(test_serial_enums);
+    RUN_TEST(test_parallel_enums);
     RUN_TEST(test_socket_enums);
     RUN_TEST(test_socket_tcp_sync);
     RUN_TEST(test_socket_tcp_async);

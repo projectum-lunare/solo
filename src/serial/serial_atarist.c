@@ -133,10 +133,10 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
 
         /* Initial modem line states */
         if (opts->rts != -1) {
-            solo_serial_set_rts(port, opts->rts);
+            solo_serial_set_rts(port, (solo_serial_line_t)opts->rts);
         }
         if (opts->dtr != -1) {
-            solo_serial_set_dtr(port, opts->dtr);
+            solo_serial_set_dtr(port, (solo_serial_line_t)opts->dtr);
         }
     }
 
@@ -187,21 +187,21 @@ int solo_serial_drain(solo_serial_t *port)
     return 0;
 }
 
-int solo_serial_set_rts(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state)
 {
     if (port == NULL) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
 
     /* Toggle RTS control via XBIOS Rsconf */
-    Rsconf(-1, on ? 2 : 0, -1, -1, -1, -1);
-    return 0;
+    Rsconf(-1, (state == SOLO_SERIAL_LINE_ON || (int)state == 1) ? 2 : 0, -1, -1, -1, -1);
+    return SOLO_SERIAL_OK;
 }
 
-int solo_serial_set_dtr(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t state)
 {
     if (port == NULL) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
 
     /*
@@ -210,12 +210,12 @@ int solo_serial_set_dtr(solo_serial_t *port, int on)
      * - Offgibit clears bit 4 (asserting DTR high)
      * - Ongibit sets bit 4 (deasserting DTR low)
      */
-    if (on) {
+    if (state == SOLO_SERIAL_LINE_ON || (int)state == 1) {
         Offgibit((short)~0x10);
     } else {
         Ongibit(0x10);
     }
-    return 0;
+    return SOLO_SERIAL_OK;
 }
 
 void solo_serial_close(solo_serial_t *port)

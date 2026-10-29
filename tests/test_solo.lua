@@ -160,6 +160,108 @@ describe("solo.parallel & solo.serial (Physical Device Driver Signatures)", func
         assert_eq(type(solo.parallel.open), "function")
         assert_eq(type(solo.serial.open), "function")
     end)
+
+    test("defines serial flow, parity, stop, data, baud, line and status enum tables", function()
+        local s = solo.serial
+        assert_eq(type(s.flow), "table")
+        assert_eq(s.flow.NONE, 0)
+        assert_eq(s.flow.HARDWARE, 1)
+        assert_eq(s.flow.SOFTWARE, 2)
+        assert_eq(s.flow.RTS_CTS, 1)
+        assert_eq(s.flow.XON_XOFF, 2)
+
+        assert_eq(type(s.parity), "table")
+        assert_eq(s.parity.NONE, string.byte("n"))
+        assert_eq(s.parity.EVEN, string.byte("e"))
+        assert_eq(s.parity.ODD, string.byte("o"))
+        assert_eq(s.parity.MARK, string.byte("m"))
+        assert_eq(s.parity.SPACE, string.byte("s"))
+
+        assert_eq(type(s.stop_bits), "table")
+        assert_eq(s.stop_bits.ONE, 1)
+        assert_eq(s.stop_bits.TWO, 2)
+        assert_eq(s.stop.STOP_1, 1)
+        assert_eq(s.stop.STOP_2, 2)
+
+        assert_eq(type(s.data_bits), "table")
+        assert_eq(s.data_bits.FIVE, 5)
+        assert_eq(s.data_bits.SIX, 6)
+        assert_eq(s.data_bits.SEVEN, 7)
+        assert_eq(s.data_bits.EIGHT, 8)
+        assert_eq(s.data.EIGHT, 8)
+
+        assert_eq(type(s.baud), "table")
+        assert_eq(s.baud.B9600, 9600)
+        assert_eq(s.baud.B19200, 19200)
+        assert_eq(s.baud.B38400, 38400)
+        assert_eq(s.baud.B115200, 115200)
+
+        assert_eq(type(s.line), "table")
+        assert_eq(s.line.IGNORE, -1)
+        assert_eq(s.line.OFF, 0)
+        assert_eq(s.line.ON, 1)
+
+        assert_eq(type(s.status), "table")
+        assert_eq(s.status.OK, 0)
+        assert_eq(s.status.ERROR, -1)
+        assert_eq(s.status.UNSUPPORTED, -2)
+    end)
+
+    test("serial open accepts options table and string parity/flow", function()
+        local port, err = solo.serial.open("/nonexistent_tty_device_12345", {
+            baud = solo.serial.baud.B115200,
+            data_bits = solo.serial.data_bits.EIGHT,
+            parity = "none",
+            stop_bits = solo.serial.stop_bits.ONE,
+            flow = "hardware",
+            rts = true,
+            dtr = true
+        })
+        assert_nil(port)
+        assert_eq(type(err), "string")
+    end)
+
+    test("serial open accepts positional arguments with string parity", function()
+        local port, err = solo.serial.open("/nonexistent_tty_device_12345", 9600, 8, "n", 1, 1)
+        assert_nil(port)
+        assert_eq(type(err), "string")
+    end)
+
+    test("defines parallel status, mode, pin and port enum tables", function()
+        local p = solo.parallel
+        assert_eq(type(p.status), "table")
+        assert_eq(p.status.OK, 0)
+        assert_eq(p.status.ERROR, -1)
+        assert_eq(p.status.UNSUPPORTED, -2)
+
+        assert_eq(type(p.mode), "table")
+        assert_eq(p.mode.SPP, 0)
+        assert_eq(p.mode.CENTRONICS, 0)
+        assert_eq(p.mode.NIBBLE, 1)
+        assert_eq(p.mode.BYTE, 2)
+        assert_eq(p.mode.EPP, 3)
+        assert_eq(p.mode.ECP, 4)
+
+        assert_eq(type(p.pin), "table")
+        assert_eq(p.pin.BUSY, 1)
+        assert_eq(p.pin.ACK, 2)
+        assert_eq(p.pin.PE, 4)
+        assert_eq(p.pin.PAPER_OUT, 4)
+        assert_eq(p.pin.SLCT, 8)
+        assert_eq(p.pin.ONLINE, 8)
+        assert_eq(p.pin.FAULT, 16)
+
+        assert_eq(type(p.port), "table")
+        assert_eq(p.port.LPT1, "LPT1")
+        assert_eq(p.port.LPT2, "LPT2")
+        assert_eq(p.port.LPT3, "LPT3")
+    end)
+
+    test("parallel open accepts options table or string path", function()
+        local port, err = solo.parallel.open({ path = "/nonexistent_lpt_device_12345" })
+        assert_nil(port)
+        assert_eq(type(err), "string")
+    end)
 end)
 
 describe("solo.socket (Network Sockets & Multiplexing)", function()
@@ -408,6 +510,8 @@ describe("solo standalone submodules (Independent C Module Loading)", function()
     test("loads solo.serial independently", function()
         local s = require("solo.serial")
         assert_eq(type(s.open), "function")
+        assert_eq(s.flow.HARDWARE, 1)
+        assert_eq(s.parity.NONE, string.byte("n"))
     end)
 
     test("loads solo.socket independently", function()
@@ -423,6 +527,8 @@ describe("solo standalone submodules (Independent C Module Loading)", function()
     test("loads solo.parallel independently", function()
         local par = require("solo.parallel")
         assert_eq(type(par.open), "function")
+        assert_eq(par.mode.SPP, 0)
+        assert_eq(par.pin.BUSY, 1)
     end)
 
     test("loads solo.sandbox independently", function()

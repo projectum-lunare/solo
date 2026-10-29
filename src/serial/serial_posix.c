@@ -219,52 +219,52 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
 
     /* Set initial modem lines if configured */
     if (opts->rts >= 0) {
-        solo_serial_set_rts(port, opts->rts);
+        solo_serial_set_rts(port, (solo_serial_line_t)opts->rts);
     }
     if (opts->dtr >= 0) {
-        solo_serial_set_dtr(port, opts->dtr);
+        solo_serial_set_dtr(port, (solo_serial_line_t)opts->dtr);
     }
 
     return port;
 }
 
-int solo_serial_set_rts(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state)
 {
 #if defined(TIOCMGET) && defined(TIOCM_RTS)
     int status;
     if (port == NULL || port->fd < 0)
-        return -1;
+        return SOLO_SERIAL_ERROR;
     if (ioctl(port->fd, TIOCMGET, &status) != 0)
-        return -1;
-    if (on)
+        return SOLO_SERIAL_ERROR;
+    if (state == SOLO_SERIAL_LINE_ON || (int)state == 1)
         status |= TIOCM_RTS;
     else
         status &= ~TIOCM_RTS;
-    return ioctl(port->fd, TIOCMSET, &status);
+    return (ioctl(port->fd, TIOCMSET, &status) == 0) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 #else
     (void)port;
-    (void)on;
-    return 0;
+    (void)state;
+    return SOLO_SERIAL_UNSUPPORTED;
 #endif
 }
 
-int solo_serial_set_dtr(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t state)
 {
 #if defined(TIOCMGET) && defined(TIOCM_DTR)
     int status;
     if (port == NULL || port->fd < 0)
-        return -1;
+        return SOLO_SERIAL_ERROR;
     if (ioctl(port->fd, TIOCMGET, &status) != 0)
-        return -1;
-    if (on)
+        return SOLO_SERIAL_ERROR;
+    if (state == SOLO_SERIAL_LINE_ON || (int)state == 1)
         status |= TIOCM_DTR;
     else
         status &= ~TIOCM_DTR;
-    return ioctl(port->fd, TIOCMSET, &status);
+    return (ioctl(port->fd, TIOCMSET, &status) == 0) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 #else
     (void)port;
-    (void)on;
-    return 0;
+    (void)state;
+    return SOLO_SERIAL_UNSUPPORTED;
 #endif
 }
 

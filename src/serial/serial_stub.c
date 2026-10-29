@@ -31,18 +31,18 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     return NULL;
 }
 
-int solo_serial_set_rts(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state)
 {
     (void)port;
-    (void)on;
-    return -1;
+    (void)state;
+    return SOLO_SERIAL_UNSUPPORTED;
 }
 
-int solo_serial_set_dtr(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t state)
 {
     (void)port;
-    (void)on;
-    return -1;
+    (void)state;
+    return SOLO_SERIAL_UNSUPPORTED;
 }
 
 int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)

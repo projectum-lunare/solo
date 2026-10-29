@@ -41,13 +41,14 @@ The library is structured as a cohesive monorepo divided into specialized subsys
 
 ### 3. `parallel` — Centronics Parallel Port
 
-- Direct hardware strobe, busy status check, and buffer drain for impact printers, matrix devices, and parallel links.
+- Direct hardware strobe, busy status check, and buffer drain for impact printers, matrix devices, and parallel links with typed enums (`solo.parallel.mode`, `solo.parallel.pin`, `solo.parallel.port`, `solo.parallel.status`).
 - Backends: POSIX `/dev/lp0`, Windows NT `LPT1`, Windows CE, DOS `INT 17h` and direct I/O port strobe, Amiga `parallel.device`, Atari ST, KolibriOS, OS/2, Plan 9.
 
 ### 4. `serial` — RS-232 Serial UART
 
-- Industrial-grade serial communication: configurable baud rates, data bits, parity, stop bits, and full flow control (hardware RTS/CTS and software XON/XOFF).
+- Industrial-grade serial communication with typed enums (`solo.serial.flow`, `solo.serial.parity`, `solo.serial.stop_bits`, `solo.serial.data_bits`, `solo.serial.baud`, `solo.serial.line`, `solo.serial.status`): configurable baud rates, data bits, parity, stop bits, and full flow control (hardware RTS/CTS and software XON/XOFF).
 - Direct modem line manipulation (`RTS`, `DTR`).
+- Flexible initialization supporting both ergonomic options tables and classic positional parameters.
 - Backends: POSIX termios, Windows NT Comm API, Windows CE, DOS BIOS `INT 14h` / 8250 UART, Amiga `serial.device`, Atari ST, KolibriOS, OS/2, Plan 9.
 
 ### 5. `socket` — Raw Network Sockets
@@ -118,11 +119,25 @@ if client then
 end
 
 -- 5. Serial Port (serial)
-local port, err = solo.serial.open("/dev/ttyUSB0", 115200, 8, string.byte("n"), 1, 1)
+local port, err = solo.serial.open("/dev/ttyUSB0", {
+    baud = solo.serial.baud.B115200,
+    data_bits = 8,
+    parity = "none",
+    stop_bits = 1,
+    flow = solo.serial.flow.HARDWARE
+})
 if port then
     port:write("AT\r\n")
     port:drain()
     port:close()
+end
+
+-- 6. Parallel Port (parallel / Centronics IEEE 1284)
+local lpt, err = solo.parallel.open(solo.parallel.port.LPT1)
+if lpt then
+    lpt:write("Print payload via Centronics!\n\f")
+    lpt:drain()
+    lpt:close()
 end
 ```
 

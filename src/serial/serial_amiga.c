@@ -185,22 +185,22 @@ int solo_serial_drain(solo_serial_t *port)
     return 0;
 }
 
-int solo_serial_set_rts(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state)
 {
     if (port == NULL || port->io == NULL || !port->is_open) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
-    (void)on;
-    return 0;
+    (void)state;
+    return SOLO_SERIAL_OK;
 }
 
-int solo_serial_set_dtr(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t state)
 {
     if (port == NULL || port->io == NULL || !port->is_open) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
-    (void)on;
-    return 0;
+    (void)state;
+    return SOLO_SERIAL_OK;
 }
 
 void solo_serial_close(solo_serial_t *port)

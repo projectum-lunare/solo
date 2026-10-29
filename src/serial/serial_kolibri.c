@@ -254,32 +254,32 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     return port;
 }
 
-int solo_serial_set_rts(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state)
 {
     uint8_t mcr;
     if (port == NULL || port->base == 0)
-        return -1;
+        return SOLO_SERIAL_ERROR;
     mcr = inb(port->base + 4);
-    if (on)
+    if (state == SOLO_SERIAL_LINE_ON || (int)state == 1)
         mcr |= 0x02;
     else
         mcr &= ~0x02;
     outb(port->base + 4, mcr);
-    return 0;
+    return SOLO_SERIAL_OK;
 }
 
-int solo_serial_set_dtr(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t state)
 {
     uint8_t mcr;
     if (port == NULL || port->base == 0)
-        return -1;
+        return SOLO_SERIAL_ERROR;
     mcr = inb(port->base + 4);
-    if (on)
+    if (state == SOLO_SERIAL_LINE_ON || (int)state == 1)
         mcr |= 0x01;
     else
         mcr &= ~0x01;
     outb(port->base + 4, mcr);
-    return 0;
+    return SOLO_SERIAL_OK;
 }
 
 int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)

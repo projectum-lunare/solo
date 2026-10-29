@@ -28,7 +28,7 @@ struct serial_port {
     char name[16];
 };
 
-static int solo_serial_set_rts_internal(HFILE handle, int on)
+static solo_serial_status_t solo_serial_set_rts_internal(HFILE handle, int on)
 {
     MODEMSTATUS ms;
     ULONG cbParam = sizeof(ms);
@@ -45,10 +45,10 @@ static int solo_serial_set_rts_internal(HFILE handle, int on)
 
     rc = DosDevIOCtl(handle, IOCTL_ASYNC, ASYNC_SETMODEMCTRL, &ms, sizeof(ms), &cbParam, NULL, 0,
                      NULL);
-    return (rc == 0) ? 0 : -1;
+    return (rc == 0) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
-static int solo_serial_set_dtr_internal(HFILE handle, int on)
+static solo_serial_status_t solo_serial_set_dtr_internal(HFILE handle, int on)
 {
     MODEMSTATUS ms;
     ULONG cbParam = sizeof(ms);
@@ -65,7 +65,7 @@ static int solo_serial_set_dtr_internal(HFILE handle, int on)
 
     rc = DosDevIOCtl(handle, IOCTL_ASYNC, ASYNC_SETMODEMCTRL, &ms, sizeof(ms), &cbParam, NULL, 0,
                      NULL);
-    return (rc == 0) ? 0 : -1;
+    return (rc == 0) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
 solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg)
@@ -255,20 +255,20 @@ int solo_serial_drain(solo_serial_t *port)
     return 0;
 }
 
-int solo_serial_set_rts(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state)
 {
     if (port == NULL || port->handle == NULLHANDLE) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
-    return solo_serial_set_rts_internal(port->handle, on);
+    return solo_serial_set_rts_internal(port->handle, (state == SOLO_SERIAL_LINE_ON || (int)state == 1) ? 1 : 0);
 }
 
-int solo_serial_set_dtr(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t state)
 {
     if (port == NULL || port->handle == NULLHANDLE) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
-    return solo_serial_set_dtr_internal(port->handle, on);
+    return solo_serial_set_dtr_internal(port->handle, (state == SOLO_SERIAL_LINE_ON || (int)state == 1) ? 1 : 0);
 }
 
 void solo_serial_close(solo_serial_t *port)

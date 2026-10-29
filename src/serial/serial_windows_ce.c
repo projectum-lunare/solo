@@ -166,20 +166,20 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     return port;
 }
 
-int solo_serial_set_rts(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state)
 {
     if (port == NULL || port->handle == INVALID_HANDLE_VALUE) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
-    return EscapeCommFunction(port->handle, on ? SETRTS : CLRRTS) ? 0 : -1;
+    return EscapeCommFunction(port->handle, (state == SOLO_SERIAL_LINE_ON || (int)state == 1) ? SETRTS : CLRRTS) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
-int solo_serial_set_dtr(solo_serial_t *port, int on)
+solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t state)
 {
     if (port == NULL || port->handle == INVALID_HANDLE_VALUE) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
-    return EscapeCommFunction(port->handle, on ? SETDTR : CLRDTR) ? 0 : -1;
+    return EscapeCommFunction(port->handle, (state == SOLO_SERIAL_LINE_ON || (int)state == 1) ? SETDTR : CLRDTR) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
 int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)

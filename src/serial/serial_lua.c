@@ -73,18 +73,51 @@ static int lsolo_serial_close(lua_State *L)
     return 0;
 }
 
+static solo_serial_line_t parse_line_state(lua_State *L, int idx)
+{
+    if (lua_isboolean(L, idx)) {
+        return lua_toboolean(L, idx) ? SOLO_SERIAL_LINE_ON : SOLO_SERIAL_LINE_OFF;
+    }
+    if (lua_isnumber(L, idx)) {
+        int v = (int)lua_tointeger(L, idx);
+        return (v > 0) ? SOLO_SERIAL_LINE_ON : SOLO_SERIAL_LINE_OFF;
+    }
+    if (lua_isstring(L, idx)) {
+        const char *s = lua_tostring(L, idx);
+        if (s != NULL) {
+            if (strcmp(s, "on") == 0 || strcmp(s, "ON") == 0 ||
+                strcmp(s, "set") == 0 || strcmp(s, "SET") == 0 ||
+                strcmp(s, "1") == 0 || strcmp(s, "high") == 0 || strcmp(s, "HIGH") == 0) {
+                return SOLO_SERIAL_LINE_ON;
+            }
+            if (strcmp(s, "off") == 0 || strcmp(s, "OFF") == 0 ||
+                strcmp(s, "clear") == 0 || strcmp(s, "CLEAR") == 0 ||
+                strcmp(s, "0") == 0 || strcmp(s, "low") == 0 || strcmp(s, "LOW") == 0) {
+                return SOLO_SERIAL_LINE_OFF;
+            }
+        }
+    }
+    return SOLO_SERIAL_LINE_OFF;
+}
+
 static int lsolo_serial_set_rts(lua_State *L)
 {
     lsolo_serial_t *p = (lsolo_serial_t *)luaL_checkudata(L, 1, SERIAL_PORT_MT);
-    int on;
+    solo_serial_line_t state;
+    solo_serial_status_t st;
+
     if (p->handle == NULL) {
         return luaL_error(L, "attempt to use closed serial port");
     }
-    on = lua_toboolean(L, 2) ? 1 : 0;
-    if (solo_serial_set_rts(p->handle, on) != 0) {
+    state = parse_line_state(L, 2);
+    st = solo_serial_set_rts(p->handle, state);
+    if (st != SOLO_SERIAL_OK) {
         lua_pushboolean(L, 0);
-        lua_pushstring(L, "failed to set RTS line");
-        return 2;
+        lua_pushstring(L, (st == SOLO_SERIAL_UNSUPPORTED)
+            ? "RTS control is not supported on this platform"
+            : "failed to set RTS line");
+        lua_pushinteger(L, st);
+        return 3;
     }
     lua_pushboolean(L, 1);
     return 1;
@@ -93,24 +126,88 @@ static int lsolo_serial_set_rts(lua_State *L)
 static int lsolo_serial_set_dtr(lua_State *L)
 {
     lsolo_serial_t *p = (lsolo_serial_t *)luaL_checkudata(L, 1, SERIAL_PORT_MT);
-    int on;
+    solo_serial_line_t state;
+    solo_serial_status_t st;
+
     if (p->handle == NULL) {
         return luaL_error(L, "attempt to use closed serial port");
     }
-    on = lua_toboolean(L, 2) ? 1 : 0;
-    if (solo_serial_set_dtr(p->handle, on) != 0) {
+    state = parse_line_state(L, 2);
+    st = solo_serial_set_dtr(p->handle, state);
+    if (st != SOLO_SERIAL_OK) {
         lua_pushboolean(L, 0);
-        lua_pushstring(L, "failed to set DTR line");
-        return 2;
+        lua_pushstring(L, (st == SOLO_SERIAL_UNSUPPORTED)
+            ? "DTR control is not supported on this platform"
+            : "failed to set DTR line");
+        lua_pushinteger(L, st);
+        return 3;
     }
     lua_pushboolean(L, 1);
     return 1;
 }
 
+static char parse_parity_value(lua_State *L, int idx, char default_val)
+{
+    if (lua_isnoneornil(L, idx)) {
+        return default_val;
+    }
+    if (lua_isnumber(L, idx)) {
+        return (char)lua_tointeger(L, idx);
+    }
+    if (lua_isstring(L, idx)) {
+        const char *s = lua_tostring(L, idx);
+        if (s == NULL || s[0] == '\0') {
+            return default_val;
+        }
+        if (strcmp(s, "n") == 0 || strcmp(s, "none") == 0 || strcmp(s, "NONE") == 0) {
+            return 'n';
+        }
+        if (strcmp(s, "e") == 0 || strcmp(s, "even") == 0 || strcmp(s, "EVEN") == 0) {
+            return 'e';
+        }
+        if (strcmp(s, "o") == 0 || strcmp(s, "odd") == 0 || strcmp(s, "ODD") == 0) {
+            return 'o';
+        }
+        if (strcmp(s, "m") == 0 || strcmp(s, "mark") == 0 || strcmp(s, "MARK") == 0) {
+            return 'm';
+        }
+        if (strcmp(s, "s") == 0 || strcmp(s, "space") == 0 || strcmp(s, "SPACE") == 0) {
+            return 's';
+        }
+        return s[0];
+    }
+    return default_val;
+}
+
+static int parse_flow_value(lua_State *L, int idx, int default_val)
+{
+    if (lua_isnoneornil(L, idx)) {
+        return default_val;
+    }
+    if (lua_isnumber(L, idx)) {
+        return (int)lua_tointeger(L, idx);
+    }
+    if (lua_isstring(L, idx)) {
+        const char *s = lua_tostring(L, idx);
+        if (s == NULL) return default_val;
+        if (strcmp(s, "none") == 0 || strcmp(s, "NONE") == 0) {
+            return SOLO_SERIAL_FLOW_NONE;
+        }
+        if (strcmp(s, "hardware") == 0 || strcmp(s, "rtscts") == 0 ||
+            strcmp(s, "HARDWARE") == 0 || strcmp(s, "RTS_CTS") == 0) {
+            return SOLO_SERIAL_FLOW_HARDWARE;
+        }
+        if (strcmp(s, "software") == 0 || strcmp(s, "xonxoff") == 0 ||
+            strcmp(s, "SOFTWARE") == 0 || strcmp(s, "XON_XOFF") == 0) {
+            return SOLO_SERIAL_FLOW_SOFTWARE;
+        }
+    }
+    return default_val;
+}
+
 /*
- * native_serial.open(path, baud, data_bits, parity_code, stop_bits, flow_code, rts, dtr)
- * All parsing, default merging, and option normalization is performed in Lua.
- * C receives purely validated scalar primitives.
+ * native_serial.open(path, [opts_table | baud, data_bits, parity, stop_bits, flow, rts, dtr])
+ * Supports both an ergonomic options table and positional arguments.
  */
 static int lsolo_serial_open(lua_State *L)
 {
@@ -120,13 +217,85 @@ static int lsolo_serial_open(lua_State *L)
     solo_serial_t *sp;
     lsolo_serial_t *p;
 
-    opts.baud = (int)luaL_optinteger(L, 2, 9600);
-    opts.data_bits = (int)luaL_optinteger(L, 3, 8);
-    opts.parity = (char)luaL_optinteger(L, 4, 'n');
-    opts.stop_bits = (int)luaL_optinteger(L, 5, 1);
-    opts.flow_control = (int)luaL_optinteger(L, 6, 1); /* 1: hardware */
-    opts.rts = lua_isnoneornil(L, 7) ? 1 : (lua_toboolean(L, 7) ? 1 : 0);
-    opts.dtr = lua_isnoneornil(L, 8) ? 1 : (lua_toboolean(L, 8) ? 1 : 0);
+    opts.baud = 9600;
+    opts.data_bits = 8;
+    opts.parity = 'n';
+    opts.stop_bits = 1;
+    opts.flow_control = SOLO_SERIAL_FLOW_HARDWARE;
+    opts.rts = 1;
+    opts.dtr = 1;
+
+    if (lua_istable(L, 2)) {
+        lua_getfield(L, 2, "baud");
+        if (!lua_isnil(L, -1)) {
+            opts.baud = (int)luaL_checkinteger(L, -1);
+        }
+        lua_pop(L, 1);
+
+        lua_getfield(L, 2, "data_bits");
+        if (lua_isnil(L, -1)) {
+            lua_pop(L, 1);
+            lua_getfield(L, 2, "data");
+        }
+        if (!lua_isnil(L, -1)) {
+            opts.data_bits = (int)luaL_checkinteger(L, -1);
+        }
+        lua_pop(L, 1);
+
+        lua_getfield(L, 2, "parity");
+        if (!lua_isnil(L, -1)) {
+            opts.parity = parse_parity_value(L, -1, 'n');
+        }
+        lua_pop(L, 1);
+
+        lua_getfield(L, 2, "stop_bits");
+        if (lua_isnil(L, -1)) {
+            lua_pop(L, 1);
+            lua_getfield(L, 2, "stop");
+        }
+        if (!lua_isnil(L, -1)) {
+            opts.stop_bits = (int)luaL_checkinteger(L, -1);
+        }
+        lua_pop(L, 1);
+
+        lua_getfield(L, 2, "flow");
+        if (lua_isnil(L, -1)) {
+            lua_pop(L, 1);
+            lua_getfield(L, 2, "flow_control");
+        }
+        if (!lua_isnil(L, -1)) {
+            opts.flow_control = parse_flow_value(L, -1, SOLO_SERIAL_FLOW_HARDWARE);
+        }
+        lua_pop(L, 1);
+
+        lua_getfield(L, 2, "rts");
+        if (!lua_isnil(L, -1)) {
+            if (lua_isboolean(L, -1)) {
+                opts.rts = lua_toboolean(L, -1) ? 1 : 0;
+            } else if (lua_isnumber(L, -1)) {
+                opts.rts = (int)lua_tointeger(L, -1);
+            }
+        }
+        lua_pop(L, 1);
+
+        lua_getfield(L, 2, "dtr");
+        if (!lua_isnil(L, -1)) {
+            if (lua_isboolean(L, -1)) {
+                opts.dtr = lua_toboolean(L, -1) ? 1 : 0;
+            } else if (lua_isnumber(L, -1)) {
+                opts.dtr = (int)lua_tointeger(L, -1);
+            }
+        }
+        lua_pop(L, 1);
+    } else {
+        opts.baud = (int)luaL_optinteger(L, 2, 9600);
+        opts.data_bits = (int)luaL_optinteger(L, 3, 8);
+        opts.parity = parse_parity_value(L, 4, 'n');
+        opts.stop_bits = (int)luaL_optinteger(L, 5, 1);
+        opts.flow_control = parse_flow_value(L, 6, SOLO_SERIAL_FLOW_HARDWARE);
+        opts.rts = lua_isnoneornil(L, 7) ? 1 : (lua_toboolean(L, 7) ? 1 : 0);
+        opts.dtr = lua_isnoneornil(L, 8) ? 1 : (lua_toboolean(L, 8) ? 1 : 0);
+    }
 
     sp = solo_serial_open(path, &opts, &err_msg);
     if (sp == NULL) {
@@ -166,6 +335,107 @@ static const luaL_Reg serial_funcs[] = {
     {NULL,   NULL        }
 };
 
+static void register_serial_enums(lua_State *L)
+{
+    /* flow */
+    lua_newtable(L);
+    lua_pushinteger(L, SOLO_SERIAL_FLOW_NONE);
+    lua_setfield(L, -2, "NONE");
+    lua_pushinteger(L, SOLO_SERIAL_FLOW_HARDWARE);
+    lua_setfield(L, -2, "HARDWARE");
+    lua_pushinteger(L, SOLO_SERIAL_FLOW_SOFTWARE);
+    lua_setfield(L, -2, "SOFTWARE");
+    lua_pushinteger(L, SOLO_SERIAL_FLOW_HARDWARE);
+    lua_setfield(L, -2, "RTS_CTS");
+    lua_pushinteger(L, SOLO_SERIAL_FLOW_SOFTWARE);
+    lua_setfield(L, -2, "XON_XOFF");
+    lua_setfield(L, -2, "flow");
+
+    /* parity */
+    lua_newtable(L);
+    lua_pushinteger(L, SOLO_SERIAL_PARITY_NONE);
+    lua_setfield(L, -2, "NONE");
+    lua_pushinteger(L, SOLO_SERIAL_PARITY_EVEN);
+    lua_setfield(L, -2, "EVEN");
+    lua_pushinteger(L, SOLO_SERIAL_PARITY_ODD);
+    lua_setfield(L, -2, "ODD");
+    lua_pushinteger(L, SOLO_SERIAL_PARITY_MARK);
+    lua_setfield(L, -2, "MARK");
+    lua_pushinteger(L, SOLO_SERIAL_PARITY_SPACE);
+    lua_setfield(L, -2, "SPACE");
+    lua_setfield(L, -2, "parity");
+
+    /* stop_bits & stop */
+    lua_newtable(L);
+    lua_pushinteger(L, SOLO_SERIAL_STOP_1);
+    lua_setfield(L, -2, "ONE");
+    lua_pushinteger(L, SOLO_SERIAL_STOP_2);
+    lua_setfield(L, -2, "TWO");
+    lua_pushinteger(L, SOLO_SERIAL_STOP_1);
+    lua_setfield(L, -2, "STOP_1");
+    lua_pushinteger(L, SOLO_SERIAL_STOP_2);
+    lua_setfield(L, -2, "STOP_2");
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -3, "stop_bits");
+    lua_setfield(L, -2, "stop");
+
+    /* data_bits & data */
+    lua_newtable(L);
+    lua_pushinteger(L, SOLO_SERIAL_DATA_5);
+    lua_setfield(L, -2, "FIVE");
+    lua_pushinteger(L, SOLO_SERIAL_DATA_6);
+    lua_setfield(L, -2, "SIX");
+    lua_pushinteger(L, SOLO_SERIAL_DATA_7);
+    lua_setfield(L, -2, "SEVEN");
+    lua_pushinteger(L, SOLO_SERIAL_DATA_8);
+    lua_setfield(L, -2, "EIGHT");
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -3, "data_bits");
+    lua_setfield(L, -2, "data");
+
+    /* baud */
+    lua_newtable(L);
+    lua_pushinteger(L, SOLO_SERIAL_BAUD_300);
+    lua_setfield(L, -2, "B300");
+    lua_pushinteger(L, SOLO_SERIAL_BAUD_1200);
+    lua_setfield(L, -2, "B1200");
+    lua_pushinteger(L, SOLO_SERIAL_BAUD_2400);
+    lua_setfield(L, -2, "B2400");
+    lua_pushinteger(L, SOLO_SERIAL_BAUD_4800);
+    lua_setfield(L, -2, "B4800");
+    lua_pushinteger(L, SOLO_SERIAL_BAUD_9600);
+    lua_setfield(L, -2, "B9600");
+    lua_pushinteger(L, SOLO_SERIAL_BAUD_19200);
+    lua_setfield(L, -2, "B19200");
+    lua_pushinteger(L, SOLO_SERIAL_BAUD_38400);
+    lua_setfield(L, -2, "B38400");
+    lua_pushinteger(L, SOLO_SERIAL_BAUD_57600);
+    lua_setfield(L, -2, "B57600");
+    lua_pushinteger(L, SOLO_SERIAL_BAUD_115200);
+    lua_setfield(L, -2, "B115200");
+    lua_setfield(L, -2, "baud");
+
+    /* line */
+    lua_newtable(L);
+    lua_pushinteger(L, SOLO_SERIAL_LINE_IGNORE);
+    lua_setfield(L, -2, "IGNORE");
+    lua_pushinteger(L, SOLO_SERIAL_LINE_OFF);
+    lua_setfield(L, -2, "OFF");
+    lua_pushinteger(L, SOLO_SERIAL_LINE_ON);
+    lua_setfield(L, -2, "ON");
+    lua_setfield(L, -2, "line");
+
+    /* status */
+    lua_newtable(L);
+    lua_pushinteger(L, SOLO_SERIAL_OK);
+    lua_setfield(L, -2, "OK");
+    lua_pushinteger(L, SOLO_SERIAL_ERROR);
+    lua_setfield(L, -2, "ERROR");
+    lua_pushinteger(L, SOLO_SERIAL_UNSUPPORTED);
+    lua_setfield(L, -2, "UNSUPPORTED");
+    lua_setfield(L, -2, "status");
+}
+
 int luaopen_solo_serial(lua_State *L)
 {
     if (luaL_newmetatable(L, SERIAL_PORT_MT)) {
@@ -176,5 +446,6 @@ int luaopen_solo_serial(lua_State *L)
     lua_pop(L, 1);
 
     luaL_newlib(L, serial_funcs);
+    register_serial_enums(L);
     return 1;
 }
