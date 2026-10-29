@@ -1,284 +1,352 @@
+--
 -- solo - Physical I/O, System Foundations & Hardware Abstractions
 -- Projectum Lunare <https://github.com/projectum-lunare/solo>
 -- Copyright (C) 2026 Gustavo Veiga <gustavo.veiga@outlook.com.br>
 -- Mozilla Public License Version 2.0
+--
 
+package.path = "./?.lua;./tests/?.lua;" .. package.path
 package.cpath = "./build/lua/?.so;./build/lua/?/init.so;./?.so;./?.dylib;./?.dll;" .. package.cpath
+
+local T = require("tests.harness")
+local describe, test = T.describe, T.test
+local assert_eq, assert_true, assert_false, assert_nil = T.assert_eq, T.assert_true, T.assert_false, T.assert_nil
 
 local solo = require("solo")
 
-print("========================================")
-print(" solo Lua Test Suite")
-print(" Version: " .. solo.version())
-print("========================================")
+describe("solo.platform (System Architecture & Metadata)", function()
+    local p = solo.platform
 
--- 1. Test Platform (Metadata only)
-print("\n[1] Testing solo.platform...")
-local p = solo.platform
-assert(type(p.os) == "string", "platform.os must be string")
-assert(type(p.arch) == "string", "platform.arch must be string")
-assert(type(p.bits) == "number", "platform.bits must be number")
-assert(type(p.endian) == "string", "platform.endian must be string")
-print(string.format("    Detected: OS='%s', Arch='%s', Bitness=%d, Endian='%s'", p.os, p.arch, p.bits, p.endian))
-assert(p.exists == nil, "platform must not have filesystem methods")
-print("    ✓ platform passed!")
+    test("exposes valid OS and CPU architecture identifiers", function()
+        assert_eq(type(p.os), "string")
+        assert_true(#p.os > 0)
+        assert_eq(type(p.arch), "string")
+        assert_true(#p.arch > 0)
+    end)
 
--- 2. Test Filesystem & fs alias
-print("\n[2] Testing solo.filesystem & solo.fs alias...")
-assert(solo.filesystem ~= nil, "solo.filesystem must exist")
-assert(solo.fs ~= nil, "solo.fs alias must exist")
-assert(solo.filesystem == solo.fs, "solo.fs must be identical to solo.filesystem")
-assert(type(solo.filesystem.exists) == "function", "filesystem.exists must be a function")
-assert(solo.filesystem.exists(".") == true, "Current directory must exist")
-assert(solo.fs.exists(".") == true, "solo.fs.exists must work")
-assert(solo.fs.exists("/nonexistent_xyz_998877") == false, "Nonexistent file must return false")
+    test("detects word size and bitness flags", function()
+        assert_eq(type(p.bits), "number")
+        assert_true(p.bits == 16 or p.bits == 32 or p.bits == 64)
+        assert_eq(type(p.is_64bit), "boolean")
+        assert_eq(type(p.is_32bit), "boolean")
+        assert_eq(type(p.is_16bit), "boolean")
+    end)
 
-local req_fs = require("solo.fs")
-assert(req_fs == solo.fs, "require('solo.fs') must resolve correctly")
-local req_filesystem = require("solo.filesystem")
-assert(req_filesystem == solo.filesystem, "require('solo.filesystem') must resolve correctly")
-print("    ✓ filesystem & fs alias passed!")
+    test("detects endianness and enforces mutual exclusivity", function()
+        assert_true(p.endian == "little" or p.endian == "big")
+        assert_eq(type(p.is_little_endian), "boolean")
+        assert_eq(type(p.is_big_endian), "boolean")
+        assert_true(p.is_little_endian ~= p.is_big_endian)
+    end)
 
--- 3. Test Sandbox
-print("\n[3] Testing solo.sandbox...")
-local s = solo.sandbox
-local backend, version = s.backend()
-print(string.format("    Active sandbox backend: '%s' (version %s)", backend, tostring(version)))
-assert(type(backend) == "string", "backend must be a string")
-assert(type(s.is_supported) == "function", "is_supported must be a function")
-print("    ✓ sandbox passed!")
+    test("exposes valid target operating system boolean flags", function()
+        assert_eq(type(p.is_linux), "boolean")
+        assert_eq(type(p.is_darwin), "boolean")
+        assert_eq(type(p.is_bsd), "boolean")
+        assert_eq(type(p.is_haiku), "boolean")
+        assert_true(p.is_posix or p.is_windows or p.is_amiga or p.is_plan9 or p.is_kolibri or p.is_dos or p.is_os2 or p.is_atarist)
+    end)
 
--- 4. Test Parallel & Serial API availability
-print("\n[4] Testing solo.parallel & solo.serial APIs...")
-assert(type(solo.parallel.open) == "function", "parallel.open must exist")
-assert(type(solo.serial.open) == "function", "serial.open must exist")
-print("    ✓ parallel and serial signatures verified!")
+    test("platform does not have filesystem methods", function()
+        assert_nil(p.exists)
+    end)
+end)
 
--- 5. Test Sockets (Enums, TCP & UDP, Sync & Async, Multiplexing)
-print("\n[5] Testing solo.socket...")
-local sock = solo.socket
+describe("solo.filesystem (Filesystem Abstraction & fs Alias)", function()
+    test("exposes identical solo.filesystem and solo.fs alias", function()
+        assert_true(solo.filesystem ~= nil)
+        assert_true(solo.fs ~= nil)
+        assert_eq(solo.filesystem, solo.fs)
+        assert_eq(type(solo.filesystem.exists), "function")
+    end)
 
--- 5.1 Verify Enums
-print("    Testing Enums...")
-assert(sock.type ~= nil, "sock.type must exist")
-assert(sock.type.TCP == 1, "type.TCP must be 1")
-assert(sock.type.UDP == 2, "type.UDP must be 2")
-assert(sock.TCP == 1, "sock.TCP direct constant must be 1")
-assert(sock.UDP == 2, "sock.UDP direct constant must be 2")
+    test("checks existence of existing directories and files", function()
+        assert_true(solo.filesystem.exists("."))
+        assert_true(solo.fs.exists("."))
+        assert_true(solo.fs.exists("include/solo/solo.h"))
+    end)
 
-assert(sock.mode ~= nil, "sock.mode must exist")
-assert(sock.mode.BLOCKING == 0, "mode.BLOCKING must be 0")
-assert(sock.mode.NONBLOCKING == 1, "mode.NONBLOCKING must be 1")
+    test("returns false for nonexistent absolute and relative paths", function()
+        assert_false(solo.fs.exists("/nonexistent_xyz_998877"))
+        assert_false(solo.fs.exists("nonexistent_path_xyz_123.bin"))
+    end)
 
-assert(sock.status ~= nil, "sock.status must exist")
-assert(sock.status.OK == 0, "status.OK must be 0")
-assert(sock.status.ERROR == -1, "status.ERROR must be -1")
-assert(sock.status.AGAIN == -2, "status.AGAIN must be -2")
-assert(sock.status.CLOSED == -3, "status.CLOSED must be -3")
+    test("submodules require('solo.fs') and require('solo.filesystem') resolve correctly", function()
+        local req_fs = require("solo.fs")
+        assert_eq(req_fs, solo.fs)
+        local req_filesystem = require("solo.filesystem")
+        assert_eq(req_filesystem, solo.filesystem)
+    end)
+end)
 
-assert(sock.event ~= nil, "sock.event must exist")
-assert(sock.event.READ == 1, "event.READ must be 1")
-assert(sock.event.WRITE == 2, "event.WRITE must be 2")
-assert(sock.event.ERR == 4, "event.ERR must be 4")
-print("    ✓ Enums verified!")
+describe("solo.sandbox (Kernel Security & Isolation)", function()
+    local s = solo.sandbox
 
--- 5.2 Test TCP Synchronous loopback
-print("    Testing TCP Synchronous loopback...")
-local tcp_port = 19935
-local server, err = sock.bind("127.0.0.1", tcp_port, 5, sock.mode.BLOCKING)
-if not server then
-    tcp_port = 19936
-    server, err = sock.bind("127.0.0.1", tcp_port, 5, sock.mode.BLOCKING)
+    test("exposes backend name and version information", function()
+        local backend, version = s.backend()
+        assert_eq(type(backend), "string")
+        assert_true(#backend > 0)
+        assert_true(version == nil or type(version) == "number")
+    end)
+
+    test("provides sandbox API function signatures", function()
+        assert_eq(type(s.is_supported), "function")
+        assert_eq(type(s.unveil), "function")
+        assert_eq(type(s.lock), "function")
+        assert_eq(type(s.pledge), "function")
+    end)
+
+    test("unveil and pledge invocations return boolean status", function()
+        assert_eq(type(s.unveil(".", "r")), "boolean")
+        assert_eq(type(s.pledge("stdio rpath")), "boolean")
+    end)
+end)
+
+describe("solo.parallel & solo.serial (Physical Device Driver Signatures)", function()
+    test("exposes open constructors for parallel and serial drivers", function()
+        assert_eq(type(solo.parallel.open), "function")
+        assert_eq(type(solo.serial.open), "function")
+    end)
+end)
+
+describe("solo.socket (Network Sockets & Multiplexing)", function()
+    local sock = solo.socket
+
+    test("defines socket type constants", function()
+        assert_true(sock.type ~= nil)
+        assert_eq(sock.type.TCP, 1)
+        assert_eq(sock.type.UDP, 2)
+        assert_eq(sock.TCP, 1)
+        assert_eq(sock.UDP, 2)
+    end)
+
+    test("defines socket mode constants", function()
+        assert_true(sock.mode ~= nil)
+        assert_eq(sock.mode.BLOCKING, 0)
+        assert_eq(sock.mode.NONBLOCKING, 1)
+    end)
+
+    test("defines socket status constants", function()
+        assert_true(sock.status ~= nil)
+        assert_eq(sock.status.OK, 0)
+        assert_eq(sock.status.ERROR, -1)
+        assert_eq(sock.status.AGAIN, -2)
+        assert_eq(sock.status.CLOSED, -3)
+    end)
+
+    test("defines socket event polling masks", function()
+        assert_true(sock.event ~= nil)
+        assert_eq(sock.event.READ, 1)
+        assert_eq(sock.event.WRITE, 2)
+        assert_eq(sock.event.ERR, 4)
+    end)
+
+    test("transfers data over synchronous TCP loopback", function()
+        local tcp_port = 19935
+        local server, err = sock.bind("127.0.0.1", tcp_port, 5, sock.mode.BLOCKING)
+        if not server then
+            tcp_port = 19936
+            server, err = sock.bind("127.0.0.1", tcp_port, 5, sock.mode.BLOCKING)
+        end
+        assert_true(server ~= nil, "Failed to bind server: " .. tostring(err))
+        assert_eq(server:type(), "tcp")
+        assert_true(server:is_blocking())
+
+        local client, err_c = sock.connect("127.0.0.1", tcp_port, sock.mode.BLOCKING)
+        assert_true(client ~= nil, "Failed to connect client: " .. tostring(err_c))
+
+        local accepted, ip, port = server:accept()
+        assert_true(accepted ~= nil, "Failed to accept client")
+        assert_eq(type(ip), "string")
+        assert_eq(type(port), "number")
+
+        local test_msg = "Hello TCP Synchronous!"
+        local written = client:send(test_msg)
+        assert_eq(written, #test_msg)
+
+        local received = accepted:recv(128)
+        assert_eq(received, test_msg)
+
+        client:close()
+        accepted:close()
+        server:close()
+    end)
+
+    test("handles non-blocking TCP asynchronous loopback", function()
+        local async_tcp_port = 19945
+        local async_server, a_err = sock.bind("127.0.0.1", async_tcp_port, 5, sock.mode.NONBLOCKING)
+        if not async_server then
+            async_tcp_port = 19946
+            async_server, a_err = sock.bind("127.0.0.1", async_tcp_port, 5, sock.mode.NONBLOCKING)
+        end
+        assert_true(async_server ~= nil, "Failed to bind async server: " .. tostring(a_err))
+        assert_false(async_server:is_blocking())
+
+        -- Non-blocking accept on idle server must return nil, "again"
+        local non_client, non_err = async_server:accept()
+        assert_nil(non_client)
+        assert_eq(non_err, "again")
+
+        -- Connect client
+        local async_client = sock.connect("127.0.0.1", async_tcp_port)
+        assert_true(async_client ~= nil, "Failed to connect to async server")
+
+        -- Server wait for read readiness
+        local ready = async_server:wait("r", 1000)
+        assert_true(ready == "r" or ready == "rw")
+
+        local client_sock = async_server:accept()
+        assert_true(client_sock ~= nil, "Failed to accept client on ready server")
+        client_sock:set_mode("nonblocking")
+        assert_false(client_sock:is_blocking())
+
+        -- Read on empty socket must return nil, "again"
+        local empty_data, empty_err = client_sock:recv(128)
+        assert_nil(empty_data)
+        assert_eq(empty_err, "again")
+
+        -- Send data from client
+        local async_msg = "Hello TCP Asynchronous!"
+        async_client:send(async_msg)
+
+        -- Wait for read readiness
+        assert_true(client_sock:wait(sock.event.READ, 1000) ~= nil)
+        local async_recv = client_sock:recv(128)
+        assert_eq(async_recv, async_msg)
+
+        async_client:close()
+        client_sock:close()
+        async_server:close()
+    end)
+
+    test("transfers datagrams over synchronous UDP loopback", function()
+        local udp_port = 19955
+        local udp_server, u_err = sock.udp_bind("127.0.0.1", udp_port)
+        if not udp_server then
+            udp_port = 19956
+            udp_server, u_err = sock.udp_bind("127.0.0.1", udp_port)
+        end
+        assert_true(udp_server ~= nil, "Failed to bind UDP server: " .. tostring(u_err))
+        assert_eq(udp_server:type(), "udp")
+
+        local udp_client = sock.udp()
+        assert_true(udp_client ~= nil, "Failed to create UDP client")
+        assert_eq(udp_client:type(), "udp")
+
+        local udp_msg = "Hello UDP Datagram!"
+        local sent = udp_client:sendto(udp_msg, "127.0.0.1", udp_port)
+        assert_eq(sent, #udp_msg)
+
+        local udp_data, src_ip, src_port = udp_server:recvfrom(128)
+        assert_eq(udp_data, udp_msg)
+        assert_true(type(src_ip) == "string" and #src_ip > 0)
+        assert_true(type(src_port) == "number" and src_port > 0)
+
+        -- Reply back to client
+        local udp_reply = "Ack UDP Datagram!"
+        udp_server:sendto(udp_reply, src_ip, src_port)
+        local reply_data = udp_client:recvfrom(128)
+        assert_eq(reply_data, udp_reply)
+
+        udp_client:close()
+        udp_server:close()
+    end)
+
+    test("multiplexes asynchronous UDP with select()", function()
+        local async_udp_port = 19965
+        local async_udp = sock.udp_bind("127.0.0.1", async_udp_port, sock.mode.NONBLOCKING)
+        if not async_udp then
+            async_udp_port = 19966
+            async_udp = sock.udp_bind("127.0.0.1", async_udp_port, sock.mode.NONBLOCKING)
+        end
+        assert_true(async_udp ~= nil, "Failed to bind async UDP server")
+        assert_false(async_udp:is_blocking())
+
+        -- recvfrom on empty nonblocking UDP socket must return nil, "again"
+        local d_none, err_none = async_udp:recvfrom(128)
+        assert_nil(d_none)
+        assert_eq(err_none, "again")
+
+        -- wait timeout check
+        local wait_res, wait_err = async_udp:wait("r", 50)
+        assert_nil(wait_res)
+        assert_eq(wait_err, "timeout")
+
+        -- select check on idle socket
+        local ready_r, ready_w = sock.select({ async_udp }, nil, 50)
+        assert_eq(#ready_r, 0)
+
+        -- Send datagram
+        local u_cli = sock.udp()
+        local async_udp_msg = "Async UDP Multiplexing Payload"
+        u_cli:sendto(async_udp_msg, "127.0.0.1", async_udp_port)
+
+        -- select should now identify async_udp as ready
+        ready_r, ready_w = sock.select({ async_udp }, nil, 1000)
+        assert_eq(#ready_r, 1)
+        assert_eq(ready_r[1], async_udp)
+
+        local recvd_async_udp = async_udp:recvfrom(128)
+        assert_eq(recvd_async_udp, async_udp_msg)
+
+        u_cli:close()
+        async_udp:close()
+    end)
+
+    test("honors socket timeout configuration", function()
+        local to_port = 19975
+        local to_server = sock.bind("127.0.0.1", to_port, 5)
+        if not to_server then
+            to_port = 19976
+            to_server = sock.bind("127.0.0.1", to_port, 5)
+        end
+        local to_client = sock.connect("127.0.0.1", to_port)
+        local to_acc = to_server:accept()
+
+        to_acc:set_timeout(100) -- 100ms timeout
+        local to_data, to_err = to_acc:recv(64)
+        assert_nil(to_data)
+        assert_eq(to_err, "again")
+
+        to_client:close()
+        to_acc:close()
+        to_server:close()
+    end)
+end)
+
+describe("solo standalone submodules (Independent C Module Loading)", function()
+    test("loads solo.platform independently", function()
+        local p = require("solo.platform")
+        assert_eq(type(p.os), "string")
+        assert_eq(p.os, solo.platform.os)
+    end)
+
+    test("loads solo.serial independently", function()
+        local s = require("solo.serial")
+        assert_eq(type(s.open), "function")
+    end)
+
+    test("loads solo.socket independently", function()
+        local sock = require("solo.socket")
+        assert_eq(type(sock.connect), "function")
+    end)
+
+    test("loads solo.fs independently", function()
+        local fs = require("solo.fs")
+        assert_eq(type(fs.exists), "function")
+    end)
+
+    test("loads solo.parallel independently", function()
+        local par = require("solo.parallel")
+        assert_eq(type(par.open), "function")
+    end)
+
+    test("loads solo.sandbox independently", function()
+        local sbx = require("solo.sandbox")
+        assert_eq(type(sbx.is_supported), "function")
+    end)
+end)
+
+if arg and arg[0] and arg[0]:match("test_solo%.lua$") then
+    os.exit(T.summary())
 end
-assert(server, "Failed to bind server: " .. tostring(err))
-assert(server:type() == "tcp", "server:type() must be 'tcp'")
-assert(server:is_blocking() == true, "server must be blocking")
-
-local client, err_c = sock.connect("127.0.0.1", tcp_port, sock.mode.BLOCKING)
-assert(client, "Failed to connect client: " .. tostring(err_c))
-
-local accepted, ip, port = server:accept()
-assert(accepted, "Failed to accept client")
-assert(type(ip) == "string", "client ip must be string")
-assert(type(port) == "number", "client port must be number")
-
-local test_msg = "Hello TCP Synchronous!"
-local written = client:send(test_msg)
-assert(written == #test_msg, "Written bytes mismatch")
-
-local received = accepted:recv(128)
-assert(received == test_msg, "Received message mismatch: " .. tostring(received))
-
-client:close()
-accepted:close()
-server:close()
-print("    ✓ TCP Synchronous loopback passed!")
-
--- 5.3 Test TCP Asynchronous (Non-blocking) loopback
-print("    Testing TCP Asynchronous (Non-blocking)...")
-local async_tcp_port = 19945
-local async_server, a_err = sock.bind("127.0.0.1", async_tcp_port, 5, sock.mode.NONBLOCKING)
-if not async_server then
-    async_tcp_port = 19946
-    async_server, a_err = sock.bind("127.0.0.1", async_tcp_port, 5, sock.mode.NONBLOCKING)
-end
-assert(async_server, "Failed to bind async server: " .. tostring(a_err))
-assert(async_server:is_blocking() == false, "server must be non-blocking")
-
--- Non-blocking accept on idle server must return nil, "again"
-local non_client, non_err = async_server:accept()
-assert(non_client == nil, "accept must be nil on idle non-blocking server")
-assert(non_err == "again", "accept error must be 'again'")
-
--- Connect client
-local async_client = sock.connect("127.0.0.1", async_tcp_port)
-assert(async_client, "Failed to connect to async server")
-
--- Server wait for read readiness
-local ready = async_server:wait("r", 1000)
-assert(ready == "r" or ready == "rw", "async_server must be ready to accept")
-
-local client_sock = async_server:accept()
-assert(client_sock, "Failed to accept client on ready server")
-client_sock:set_mode("nonblocking")
-assert(client_sock:is_blocking() == false, "accepted client must be non-blocking")
-
--- Read on empty socket must return nil, "again"
-local empty_data, empty_err = client_sock:recv(128)
-assert(empty_data == nil, "recv on empty nonblocking socket must be nil")
-assert(empty_err == "again", "recv error must be 'again'")
-
--- Send data from client
-local async_msg = "Hello TCP Asynchronous!"
-async_client:send(async_msg)
-
--- Wait for read readiness
-assert(client_sock:wait(sock.event.READ, 1000) ~= nil, "client_sock must be readable")
-local async_recv = client_sock:recv(128)
-assert(async_recv == async_msg, "Received async data mismatch")
-
-async_client:close()
-client_sock:close()
-async_server:close()
-print("    ✓ TCP Asynchronous loopback passed!")
-
--- 5.4 Test UDP Synchronous
-print("    Testing UDP Synchronous datagram...")
-local udp_port = 19955
-local udp_server, u_err = sock.udp_bind("127.0.0.1", udp_port)
-if not udp_server then
-    udp_port = 19956
-    udp_server, u_err = sock.udp_bind("127.0.0.1", udp_port)
-end
-assert(udp_server, "Failed to bind UDP server: " .. tostring(u_err))
-assert(udp_server:type() == "udp", "udp_server:type() must be 'udp'")
-
-local udp_client = sock.udp()
-assert(udp_client, "Failed to create UDP client")
-assert(udp_client:type() == "udp", "udp_client:type() must be 'udp'")
-
-local udp_msg = "Hello UDP Datagram!"
-local sent = udp_client:sendto(udp_msg, "127.0.0.1", udp_port)
-assert(sent == #udp_msg, "Sent bytes mismatch")
-
-local udp_data, src_ip, src_port = udp_server:recvfrom(128)
-assert(udp_data == udp_msg, "Received UDP datagram mismatch: " .. tostring(udp_data))
-assert(type(src_ip) == "string" and #src_ip > 0, "src_ip must be valid string")
-assert(type(src_port) == "number" and src_port > 0, "src_port must be valid port number")
-
--- Reply back to client
-local udp_reply = "Ack UDP Datagram!"
-udp_server:sendto(udp_reply, src_ip, src_port)
-local reply_data = udp_client:recvfrom(128)
-assert(reply_data == udp_reply, "UDP client reply mismatch")
-
-udp_client:close()
-udp_server:close()
-print("    ✓ UDP Synchronous datagram passed!")
-
--- 5.5 Test UDP Asynchronous (Non-blocking) & Multiplexing (select)
-print("    Testing UDP Asynchronous & select multiplexing...")
-local async_udp_port = 19965
-local async_udp = sock.udp_bind("127.0.0.1", async_udp_port, sock.mode.NONBLOCKING)
-if not async_udp then
-    async_udp_port = 19966
-    async_udp = sock.udp_bind("127.0.0.1", async_udp_port, sock.mode.NONBLOCKING)
-end
-assert(async_udp, "Failed to bind async UDP server")
-assert(async_udp:is_blocking() == false, "UDP server must be non-blocking")
-
--- recvfrom on empty nonblocking UDP socket must return nil, "again"
-local d_none, err_none = async_udp:recvfrom(128)
-assert(d_none == nil, "recvfrom must return nil on empty async UDP")
-assert(err_none == "again", "recvfrom error must be 'again'")
-
--- wait timeout check
-local wait_res, wait_err = async_udp:wait("r", 50)
-assert(wait_res == nil and wait_err == "timeout", "wait must timeout")
-
--- select check on idle socket
-local ready_r, ready_w = sock.select({ async_udp }, nil, 50)
-assert(#ready_r == 0, "select must return empty table on timeout")
-
--- Send datagram
-local u_cli = sock.udp()
-local async_udp_msg = "Async UDP Multiplexing Payload"
-u_cli:sendto(async_udp_msg, "127.0.0.1", async_udp_port)
-
--- select should now identify async_udp as ready
-ready_r, ready_w = sock.select({ async_udp }, nil, 1000)
-assert(#ready_r == 1 and ready_r[1] == async_udp, "select must detect ready UDP reader")
-
-local recvd_async_udp = async_udp:recvfrom(128)
-assert(recvd_async_udp == async_udp_msg, "Async UDP payload mismatch")
-
-u_cli:close()
-async_udp:close()
-print("    ✓ UDP Asynchronous & select passed!")
-
--- 5.6 Test Socket Timeout
-print("    Testing Socket Timeouts...")
-local to_port = 19975
-local to_server = sock.bind("127.0.0.1", to_port, 5)
-if not to_server then
-    to_port = 19976
-    to_server = sock.bind("127.0.0.1", to_port, 5)
-end
-local to_client = sock.connect("127.0.0.1", to_port)
-local to_acc = to_server:accept()
-
-to_acc:set_timeout(100) -- 100ms timeout
-local to_data, to_err = to_acc:recv(64)
-assert(to_data == nil, "recv on timed-out socket must be nil")
-assert(to_err == "again", "recv error on timeout must be 'again'")
-
-to_client:close()
-to_acc:close()
-to_server:close()
-print("    ✓ Socket Timeouts passed!")
-
--- 6. Test Standalone Submodules (Modular loading without 'solo' umbrella)
-print("\n[6] Testing Standalone Submodules (independent .so loading)...")
-local standalone_p = require("solo.platform")
-assert(type(standalone_p.os) == "string", "solo.platform standalone must work")
-assert(standalone_p.os == p.os, "standalone platform must match umbrella platform")
-
-local standalone_s = require("solo.serial")
-assert(type(standalone_s.open) == "function", "solo.serial standalone must work")
-
-local standalone_sock = require("solo.socket")
-assert(type(standalone_sock.connect) == "function", "solo.socket standalone must work")
-
-local standalone_fs = require("solo.fs")
-assert(type(standalone_fs.exists) == "function", "solo.fs standalone must work")
-
-local standalone_par = require("solo.parallel")
-assert(type(standalone_par.open) == "function", "solo.parallel standalone must work")
-
-local standalone_sbx = require("solo.sandbox")
-assert(type(standalone_sbx.is_supported) == "function", "solo.sandbox standalone must work")
-print("    ✓ All standalone submodules successfully loaded independently!")
-
-print("\n========================================")
-print(">>> ALL LUA TESTS PASSED SUCCESSFULLY! <<<")
-print("========================================")

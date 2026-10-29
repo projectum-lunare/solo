@@ -28,7 +28,7 @@ LUA_SEARCH_DIRS = \
     /usr/include/lua
 
 RESOLVED_LUA_INCDIR := $(firstword $(foreach d,$(LUA_SEARCH_DIRS),$(if $(wildcard $(d)/lua.h),$(d))))
-INCLUDES = -Iinclude $(if $(RESOLVED_LUA_INCDIR),-I$(RESOLVED_LUA_INCDIR))
+INCLUDES = -Iinclude -Ivendor $(if $(RESOLVED_LUA_INCDIR),-I$(RESOLVED_LUA_INCDIR))
 
 SO_EXT  ?= so
 LIBFLAG ?= -shared
@@ -136,8 +136,8 @@ test: $(LUA_MOD) $(LIB_STATIC) $(LUA_SUBMODULES)
 	$(CC) $(CFLAGS) $(INCLUDES) tests/test_c_api.c $(LIB_STATIC) -o tests/test_c_api $(LDLIBS)
 	@echo "==> Running C unit tests..."
 	./tests/test_c_api
-	@echo "==> Running Lua test suite (umbrella & standalone modules)..."
-	$(LUA) tests/test_solo.lua
+	@echo "==> Running Lua test suite (Runner & Harness)..."
+	$(LUA) tests/runner.lua
 
 install: $(LUA_MOD) $(LUA_SUBMODULES)
 	@mkdir -p $(DESTDIR)$(INST_LIBDIR)/solo
