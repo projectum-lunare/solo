@@ -179,7 +179,7 @@ solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host
     sprintf(port_str, "%d", port);
 
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = (sock->type == SOLO_SOCK_UDP) ? SOCK_DGRAM : SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
@@ -313,7 +313,7 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
     sprintf(port_str, "%d", port);
 
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = (sock->type == SOLO_SOCK_UDP) ? SOCK_DGRAM : SOCK_STREAM;
 
     status = getaddrinfo(host, port_str, &hints, &res);
@@ -599,7 +599,7 @@ solo_socket_status_t solo_socket_sendto(solo_socket_t *sock, const char *buf, si
     sprintf(port_str, "%d", port);
 
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
 
     status = getaddrinfo(host, port_str, &hints, &res);
