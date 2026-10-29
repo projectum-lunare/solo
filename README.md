@@ -168,13 +168,16 @@ int main(void) {
 
 ```bash
 # Build static library, shared library, and Lua module:
-make
+xmake
 
-# Run C and Lua unit test suite:
-make test
+# Run C API unit tests:
+xmake test
+
+# Run Lua test suite via Forge launcher:
+xmake run test_lua
 
 # Clean artifacts:
-make clean
+xmake clean
 ```
 
 ### Modular Builds & Feature Flags
@@ -204,25 +207,25 @@ local platform = require("solo.platform") -- only platform detection (~17 KB)
 local serial   = require("solo.serial")   -- only serial communication (~27 KB)
 ```
 
-### Cross-Platform Multi-Target Builds
+### Cross-Platform Multi-Target Builds (Forge)
 
-Modular platform fragments are located in `mk/*.mk` and output platform static libraries to `build/<platform>/`:
+`solo` uses [Forge](https://github.com/projectum-lunare/forge) for automated cross-compilation and platform management:
 
 ```bash
-# Build a specific platform library:
-make posix         # build/posix/libsolo.a
-make dos           # build/dos/libsolo.lib (Open Watcom + WATT-32)
-make os2           # build/os2/libsolo.lib (Open Watcom OS/2)
-make winnt         # build/windows_nt/libsolo.a (VC4: Alpha, MIPS, PPC, x86; MinGW: x86, ARM)
-make wince         # build/windows_ce/libsolo.a (eVC 3.0: ARM, MIPS, PPC, SH-3, SH-4, x86)
-make amiga         # build/amiga/libsolo.a (m68k-amigaos-gcc)
-make atarist       # build/atarist/libsolo.a (m68k-atari-mint-gcc)
-make kolibri       # build/kolibri/libsolo.a (kos32-gcc)
-make plan9         # build/plan9/libsolo.a (Plan 9 GCC)
-make stub          # build/stub/libsolo.a (Generic ANSI C89)
+# Inspect SDK availability and platform toolchain status:
+xmake forge list
 
-# Build all 10 platform libraries at once:
-make check-all
+# Build a specific target static library:
+xmake forge posix     # build/posix/libsolo.a
+xmake forge dos       # build/dos/libsolo.a (Open Watcom + WATT-32)
+xmake forge os2       # build/os2/libsolo.a (Open Watcom OS/2)
+xmake forge wince     # build/windows_ce/arm/libsolo.a (MS eVC 3.0 ARM via wibo)
+xmake forge amiga     # build/amiga/libsolo.a (m68k-amigaos-gcc)
+xmake forge atari     # build/atarist/libsolo.a (m68k-atari-mint-gcc)
+xmake forge kolibri   # build/kolibri/libsolo.a (kos32-gcc)
+
+# Build all available platforms in a multi-target matrix:
+xmake forge all
 ```
 
 ### LuaRocks Installation

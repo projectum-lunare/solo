@@ -23,17 +23,7 @@ dependencies = {
 }
 
 build = {
-   type = "make",
-   build_variables = {
-      CFLAGS = "$(CFLAGS)",
-      LIBFLAG = "$(LIBFLAG)",
-      LUA = "$(LUA)",
-      LUA_INCDIR = "$(LUA_INCDIR)"
-   },
-   install_variables = {
-      INST_PREFIX = "$(PREFIX)",
-      INST_BINDIR = "$(BINDIR)",
-      INST_LIBDIR = "$(LIBDIR)",
-      INST_LUADIR = "$(LUADIR)"
-   }
+   type = "command",
+   build_command = "xmake",
+   install_command = "xmake install -o $(PREFIX)"
 }
