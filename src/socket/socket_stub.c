@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include <solo/socket.h>
+#include "socket_internal.h"
 
 solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char **err_msg)
 {
@@ -27,53 +28,9 @@ solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mo
     return NULL;
 }
 
-solo_socket_t *solo_socket_tcp(solo_socket_mode_t mode, char **err_msg)
-{
-    return solo_socket_create(SOLO_SOCK_TCP, mode, err_msg);
-}
-
-solo_socket_t *solo_socket_udp(solo_socket_mode_t mode, char **err_msg)
-{
-    return solo_socket_create(SOLO_SOCK_UDP, mode, err_msg);
-}
-
-void solo_socket_close(solo_socket_t *sock)
+void solo_socket_backend_close(solo_socket_t *sock)
 {
     (void)sock;
-}
-
-solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
-{
-    (void)host;
-    (void)port;
-    (void)mode;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("sockets are not supported on this platform");
-    }
-    return NULL;
-}
-
-solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_socket_mode_t mode, char **err_msg)
-{
-    (void)host;
-    (void)port;
-    (void)backlog;
-    (void)mode;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("sockets are not supported on this platform");
-    }
-    return NULL;
-}
-
-solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
-{
-    (void)host;
-    (void)port;
-    (void)mode;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("sockets are not supported on this platform");
-    }
-    return NULL;
 }
 
 solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg)
@@ -112,7 +69,7 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     return NULL;
 }
 
-solo_socket_status_t solo_socket_send(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
+solo_socket_status_t solo_socket_backend_send(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
 {
     (void)sock;
     (void)buf;
@@ -132,16 +89,6 @@ solo_socket_status_t solo_socket_recv(solo_socket_t *sock, char *buf, size_t max
         *received = 0;
     }
     return SOLO_SOCK_ERROR;
-}
-
-solo_socket_status_t solo_socket_write(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
-{
-    return solo_socket_send(sock, buf, len, sent);
-}
-
-solo_socket_status_t solo_socket_read(solo_socket_t *sock, char *buf, size_t max_len, size_t *received)
-{
-    return solo_socket_recv(sock, buf, max_len, received);
 }
 
 solo_socket_status_t solo_socket_sendto(solo_socket_t *sock, const char *buf, size_t len,
@@ -174,7 +121,7 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
     return SOLO_SOCK_ERROR;
 }
 
-solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
 {
     (void)sock;
     (void)mode;
@@ -182,19 +129,7 @@ solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_
     return SOLO_SOCK_OK;
 }
 
-solo_socket_mode_t solo_socket_get_mode(const solo_socket_t *sock)
-{
-    (void)sock;
-    return SOLO_SOCK_BLOCKING;
-}
-
-solo_socket_type_t solo_socket_get_type(const solo_socket_t *sock)
-{
-    (void)sock;
-    return SOLO_SOCK_TCP;
-}
-
-solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
 {
     (void)sock;
     (void)timeout_ms;
@@ -202,18 +137,12 @@ solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms
     return SOLO_SOCK_OK;
 }
 
-int solo_socket_wait(solo_socket_t *sock, int events, int timeout_ms)
+int solo_socket_backend_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms)
 {
-    (void)sock;
-    (void)events;
+    (void)fds;
+    (void)nfds;
     (void)timeout_ms;
     return 0;
-}
-
-int solo_socket_get_fd(const solo_socket_t *sock)
-{
-    (void)sock;
-    return -1;
 }
 
 #else

@@ -11,31 +11,43 @@
 #include <solo/platform.h>
 #include <solo/sandbox.h>
 
-const char *solo_sandbox_backend_name(int *version_out)
+solo_sandbox_backend_t solo_sandbox_backend(int *version_out)
 {
     if (version_out != NULL) {
         *version_out = 0;
     }
+    return SOLO_SANDBOX_BACKEND_NONE;
+}
+
+const char *solo_sandbox_backend_name(int *version_out)
+{
+    solo_sandbox_backend(version_out);
     return "none";
 }
 
-int solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
+solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
 {
     (void)path;
     (void)permissions;
-    (void)err_msg;
-    return 0;
+    if (err_msg != NULL) {
+        *err_msg = safe_strdup("sandboxing is not supported on this platform");
+    }
+    return SOLO_SANDBOX_UNSUPPORTED;
 }
 
-int solo_sandbox_lock(char **err_msg)
+solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
 {
-    (void)err_msg;
-    return 0;
+    if (err_msg != NULL) {
+        *err_msg = safe_strdup("sandboxing is not supported on this platform");
+    }
+    return SOLO_SANDBOX_UNSUPPORTED;
 }
 
-int solo_sandbox_pledge(const char *promises, char **err_msg)
+solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char **err_msg)
 {
     (void)promises;
-    (void)err_msg;
-    return 0;
+    if (err_msg != NULL) {
+        *err_msg = safe_strdup("sandboxing is not supported on this platform");
+    }
+    return SOLO_SANDBOX_UNSUPPORTED;
 }

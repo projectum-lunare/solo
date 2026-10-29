@@ -22,6 +22,7 @@
 #include <sys/time.h>
 
 #include <solo/socket.h>
+#include "socket_internal.h"
 
 /*
  * Plan 9 native network file-system interface (/net/tcp and /net/udp).
@@ -32,16 +33,6 @@
  *   - /net/tcp/<id>/listen: opening blocks until an incoming client connects.
  *   - /net/<proto>/<id>/remote: contains remote address and port ("<ip>!<port>").
  */
-
-struct solo_socket {
-    int data_fd;      /* File descriptor to /net/<proto>/<conv_id>/data */
-    int ctl_fd;       /* File descriptor to /net/<proto>/<conv_id>/ctl */
-    char conv_id[16]; /* Conversation line number (e.g. "42") */
-    int is_server;    /* 1 if listening server socket, 0 if connected socket */
-    solo_socket_type_t type;
-    solo_socket_mode_t mode;
-    int timeout_ms;
-};
 
 static void trim_trailing_whitespace(char *str)
 {
@@ -89,18 +80,14 @@ solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mo
     snprintf(clone_path, sizeof(clone_path), "/net/%s/clone", proto_name(type));
     ctl_fd = open(clone_path, O_RDWR);
     if (ctl_fd < 0) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Plan 9: cannot open clone file (IP stack mounted?)");
-        }
+        solo_socket_set_err(err_msg, "Plan 9: cannot open clone file (IP stack mounted?)");
         return NULL;
     }
 
     n = read(ctl_fd, conv, sizeof(conv) - 1);
     if (n <= 0) {
         close(ctl_fd);
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Plan 9: failed to allocate conversation line");
-        }
+        solo_socket_set_err(err_msg, "Plan 9: failed to allocate conversation line");
         return NULL;
     }
     conv[n] = '\0';
@@ -109,9 +96,7 @@ solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mo
     sock = (solo_socket_t *)malloc(sizeof(solo_socket_t));
     if (sock == NULL) {
         close(ctl_fd);
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("out of memory");
-        }
+        solo_socket_set_err(err_msg, "out of memory");
         return NULL;
     }
 
@@ -140,17 +125,7 @@ solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mo
     return sock;
 }
 
-solo_socket_t *solo_socket_tcp(solo_socket_mode_t mode, char **err_msg)
-{
-    return solo_socket_create(SOLO_SOCK_TCP, mode, err_msg);
-}
-
-solo_socket_t *solo_socket_udp(solo_socket_mode_t mode, char **err_msg)
-{
-    return solo_socket_create(SOLO_SOCK_UDP, mode, err_msg);
-}
-
-void solo_socket_close(solo_socket_t *sock)
+void solo_socket_backend_close(solo_socket_t *sock)
 {
     if (sock == NULL) {
         return;
@@ -163,7 +138,6 @@ void solo_socket_close(solo_socket_t *sock)
         close(sock->ctl_fd);
         sock->ctl_fd = -1;
     }
-    free(sock);
 }
 
 solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg)
@@ -172,27 +146,19 @@ solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host
     (void)backlog;
 
     if (sock == NULL || sock->ctl_fd < 0) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("invalid socket handle");
-        }
+        solo_socket_set_err(err_msg, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
 
-    if (host == NULL || host[0] == '\0') {
-        host = "*";
-    }
+    host = solo_socket_normalize_bind_host(host);
 
     if (format_net_cmd(cmd, sizeof(cmd), "announce", host, port) != 0) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Plan 9: host name is too long");
-        }
+        solo_socket_set_err(err_msg, "Plan 9: host name is too long");
         return SOLO_SOCK_ERROR;
     }
 
     if (write(sock->ctl_fd, cmd, strlen(cmd)) < 0) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Plan 9: announce failed");
-        }
+        solo_socket_set_err(err_msg, "Plan 9: announce failed");
         return SOLO_SOCK_ERROR;
     }
 
@@ -216,56 +182,20 @@ solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host
     return SOLO_SOCK_OK;
 }
 
-solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_socket_mode_t mode, char **err_msg)
-{
-    solo_socket_t *sock = solo_socket_create(SOLO_SOCK_TCP, mode, err_msg);
-    if (sock == NULL) {
-        return NULL;
-    }
-
-    if (solo_socket_bind_sock(sock, host, port, backlog, err_msg) != SOLO_SOCK_OK) {
-        solo_socket_close(sock);
-        return NULL;
-    }
-
-    return sock;
-}
-
-solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
-{
-    solo_socket_t *sock = solo_socket_create(SOLO_SOCK_UDP, mode, err_msg);
-    if (sock == NULL) {
-        return NULL;
-    }
-
-    if (solo_socket_bind_sock(sock, host, port, 0, err_msg) != SOLO_SOCK_OK) {
-        solo_socket_close(sock);
-        return NULL;
-    }
-
-    return sock;
-}
-
 solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg)
 {
     char cmd[256];
     char data_path[64];
 
     if (sock == NULL || sock->ctl_fd < 0) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("invalid socket handle");
-        }
+        solo_socket_set_err(err_msg, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
 
-    if (host == NULL || host[0] == '\0') {
-        host = "127.0.0.1";
-    }
+    host = solo_socket_normalize_connect_host(host);
 
     if (format_net_cmd(cmd, sizeof(cmd), "connect", host, port) != 0) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Plan 9: host name is too long");
-        }
+        solo_socket_set_err(err_msg, "Plan 9: host name is too long");
         return SOLO_SOCK_ERROR;
     }
 
@@ -274,9 +204,7 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
             (errno == EINPROGRESS || errno == EWOULDBLOCK || errno == EAGAIN)) {
             return SOLO_SOCK_AGAIN;
         }
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Plan 9: connection to remote host failed");
-        }
+        solo_socket_set_err(err_msg, "Plan 9: connection to remote host failed");
         return SOLO_SOCK_ERROR;
     }
 
@@ -284,9 +212,7 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
         snprintf(data_path, sizeof(data_path), "/net/%s/%s/data", proto_name(sock->type), sock->conv_id);
         sock->data_fd = open(data_path, O_RDWR);
         if (sock->data_fd < 0) {
-            if (err_msg != NULL) {
-                *err_msg = safe_strdup("Plan 9: failed to open data stream");
-            }
+            solo_socket_set_err(err_msg, "Plan 9: failed to open data stream");
             return SOLO_SOCK_ERROR;
         }
 
@@ -301,23 +227,6 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
     return SOLO_SOCK_OK;
 }
 
-solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
-{
-    solo_socket_status_t status;
-    solo_socket_t *sock = solo_socket_create(SOLO_SOCK_TCP, mode, err_msg);
-    if (sock == NULL) {
-        return NULL;
-    }
-
-    status = solo_socket_connect_sock(sock, host, port, err_msg);
-    if (status != SOLO_SOCK_OK && status != SOLO_SOCK_AGAIN) {
-        solo_socket_close(sock);
-        return NULL;
-    }
-
-    return sock;
-}
-
 solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t ip_len,
                                   int *client_port, char **err_msg)
 {
@@ -330,9 +239,7 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     solo_socket_t *client_sock;
 
     if (server == NULL || server->ctl_fd < 0 || !server->is_server) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("invalid server socket");
-        }
+        solo_socket_set_err(err_msg, "invalid server socket");
         return NULL;
     }
 
@@ -345,9 +252,7 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
             }
             return NULL;
         }
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Plan 9: failed to open /net/tcp/.../listen");
-        }
+        solo_socket_set_err(err_msg, "Plan 9: failed to open /net/tcp/.../listen");
         return NULL;
     }
 
@@ -360,9 +265,7 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
             }
             return NULL;
         }
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Plan 9: accept failed while reading incoming conversation");
-        }
+        solo_socket_set_err(err_msg, "Plan 9: accept failed while reading incoming conversation");
         return NULL;
     }
     client_conv[n] = '\0';
@@ -372,9 +275,7 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     client_data_fd = open(client_data_path, O_RDWR);
     if (client_data_fd < 0) {
         close(listen_fd);
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Plan 9: failed to open client data stream");
-        }
+        solo_socket_set_err(err_msg, "Plan 9: failed to open client data stream");
         return NULL;
     }
 
@@ -419,9 +320,7 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     if (client_sock == NULL) {
         close(client_data_fd);
         close(listen_fd);
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("out of memory");
-        }
+        solo_socket_set_err(err_msg, "out of memory");
         return NULL;
     }
 
@@ -436,13 +335,13 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     return client_sock;
 }
 
-solo_socket_status_t solo_socket_send(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
+solo_socket_status_t solo_socket_backend_send(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
 {
     ssize_t n;
     if (sent != NULL) {
         *sent = 0;
     }
-    if (sock == NULL || sock->data_fd < 0 || buf == NULL) {
+    if (!SOLO_SOCK_IS_VALID(sock) || buf == NULL) {
         return SOLO_SOCK_ERROR;
     }
     n = write(sock->data_fd, buf, len);
@@ -464,7 +363,7 @@ solo_socket_status_t solo_socket_recv(solo_socket_t *sock, char *buf, size_t max
     if (received != NULL) {
         *received = 0;
     }
-    if (sock == NULL || sock->data_fd < 0 || buf == NULL || max_len == 0) {
+    if (!SOLO_SOCK_IS_VALID(sock) || buf == NULL || max_len == 0) {
         return SOLO_SOCK_ERROR;
     }
     n = read(sock->data_fd, buf, max_len);
@@ -483,16 +382,6 @@ solo_socket_status_t solo_socket_recv(solo_socket_t *sock, char *buf, size_t max
     return SOLO_SOCK_OK;
 }
 
-solo_socket_status_t solo_socket_write(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
-{
-    return solo_socket_send(sock, buf, len, sent);
-}
-
-solo_socket_status_t solo_socket_read(solo_socket_t *sock, char *buf, size_t max_len, size_t *received)
-{
-    return solo_socket_recv(sock, buf, max_len, received);
-}
-
 solo_socket_status_t solo_socket_sendto(solo_socket_t *sock, const char *buf, size_t len,
                                         const char *host, int port, size_t *sent)
 {
@@ -500,7 +389,7 @@ solo_socket_status_t solo_socket_sendto(solo_socket_t *sock, const char *buf, si
     if (sent != NULL) {
         *sent = 0;
     }
-    if (sock == NULL || sock->data_fd < 0 || buf == NULL || host == NULL) {
+    if (!SOLO_SOCK_IS_VALID(sock) || buf == NULL || host == NULL) {
         return SOLO_SOCK_ERROR;
     }
 
@@ -510,7 +399,7 @@ solo_socket_status_t solo_socket_sendto(solo_socket_t *sock, const char *buf, si
         }
     }
 
-    return solo_socket_send(sock, buf, len, sent);
+    return solo_socket_backend_send(sock, buf, len, sent);
 }
 
 solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t max_len,
@@ -553,12 +442,10 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
     return status;
 }
 
-solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
 {
     if (sock == NULL) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("invalid socket handle");
-        }
+        solo_socket_set_err(err_msg, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
 
@@ -578,62 +465,61 @@ solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_
     return SOLO_SOCK_OK;
 }
 
-solo_socket_mode_t solo_socket_get_mode(const solo_socket_t *sock)
-{
-    return sock ? sock->mode : SOLO_SOCK_BLOCKING;
-}
-
-solo_socket_type_t solo_socket_get_type(const solo_socket_t *sock)
-{
-    return sock ? sock->type : SOLO_SOCK_TCP;
-}
-
-solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
 {
     if (sock == NULL) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("invalid socket handle");
-        }
+        solo_socket_set_err(err_msg, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
-    sock->timeout_ms = timeout_ms;
+    sock->timeout_ms = solo_socket_normalize_timeout(timeout_ms);
     return SOLO_SOCK_OK;
 }
 
-int solo_socket_wait(solo_socket_t *sock, int events, int timeout_ms)
+int solo_socket_backend_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms)
 {
     fd_set read_fds, write_fds, except_fds;
     struct timeval tv, *tvp = NULL;
-    int max_fd;
-    int res = 0;
+    int max_fd = -1;
+    int count = 0;
     int rc;
+    size_t i;
 
-    if (sock == NULL || sock->data_fd < 0) {
-        return SOLO_SOCK_ERROR;
-    }
+    if (fds == NULL && nfds > 0) return SOLO_SOCK_ERROR;
 
     FD_ZERO(&read_fds);
     FD_ZERO(&write_fds);
     FD_ZERO(&except_fds);
 
-    if (events & SOLO_SOCK_POLL_READ) {
-        FD_SET(sock->data_fd, &read_fds);
+    for (i = 0; i < nfds; i++) {
+        fds[i].revents = 0;
+        if (fds[i].sock != NULL && fds[i].sock->data_fd >= 0) {
+            int fd = fds[i].sock->data_fd;
+            if (fd > max_fd) max_fd = fd;
+            if (fds[i].events & SOLO_SOCK_POLL_READ) {
+                FD_SET(fd, &read_fds);
+            }
+            if (fds[i].events & SOLO_SOCK_POLL_WRITE) {
+                FD_SET(fd, &write_fds);
+            }
+            if (fds[i].events & SOLO_SOCK_POLL_ERR) {
+                FD_SET(fd, &except_fds);
+            }
+        }
     }
-    if (events & SOLO_SOCK_POLL_WRITE) {
-        FD_SET(sock->data_fd, &write_fds);
-    }
-    if (events & SOLO_SOCK_POLL_ERR) {
-        FD_SET(sock->data_fd, &except_fds);
+
+    if (max_fd < 0) {
+        return 0;
     }
 
     if (timeout_ms >= 0) {
-        tv.tv_sec = timeout_ms / 1000;
-        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        long sec, usec;
+        solo_socket_ms_to_timeval(timeout_ms, &sec, &usec);
+        tv.tv_sec = sec;
+        tv.tv_usec = usec;
         tvp = &tv;
     }
 
-    max_fd = sock->data_fd + 1;
-    rc = select(max_fd, &read_fds, &write_fds, &except_fds, tvp);
+    rc = select(max_fd + 1, &read_fds, &write_fds, &except_fds, tvp);
     if (rc < 0) {
         if (errno == EINTR) {
             return 0;
@@ -644,22 +530,17 @@ int solo_socket_wait(solo_socket_t *sock, int events, int timeout_ms)
         return 0;
     }
 
-    if (FD_ISSET(sock->data_fd, &read_fds)) {
-        res |= SOLO_SOCK_POLL_READ;
-    }
-    if (FD_ISSET(sock->data_fd, &write_fds)) {
-        res |= SOLO_SOCK_POLL_WRITE;
-    }
-    if (FD_ISSET(sock->data_fd, &except_fds)) {
-        res |= SOLO_SOCK_POLL_ERR;
+    for (i = 0; i < nfds; i++) {
+        if (fds[i].sock != NULL && fds[i].sock->data_fd >= 0) {
+            int fd = fds[i].sock->data_fd;
+            if (FD_ISSET(fd, &read_fds)) fds[i].revents |= SOLO_SOCK_POLL_READ;
+            if (FD_ISSET(fd, &write_fds)) fds[i].revents |= SOLO_SOCK_POLL_WRITE;
+            if (FD_ISSET(fd, &except_fds)) fds[i].revents |= SOLO_SOCK_POLL_ERR;
+            if (fds[i].revents != 0) count++;
+        }
     }
 
-    return res;
-}
-
-int solo_socket_get_fd(const solo_socket_t *sock)
-{
-    return sock ? sock->data_fd : -1;
+    return count;
 }
 
 #else

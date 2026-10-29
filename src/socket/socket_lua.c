@@ -1,3 +1,9 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200112L
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
 /*
  * solo - Physical I/O, System Foundations & Hardware Abstractions
  * Projectum Lunare <https://github.com/projectum-lunare/solo>
@@ -11,13 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#if defined(_WIN32)
-#include <winsock2.h>
-#else
-#include <sys/select.h>
-#include <sys/time.h>
-#endif
 
 #include <lua.h>
 #include <lualib.h>
@@ -682,108 +681,132 @@ static int lsocket_bind(lua_State *L)
 
 static int lsocket_select(lua_State *L)
 {
-    fd_set read_fds, write_fds;
-    int max_fd = -1;
+    solo_pollfd_t local_pfds[16];
+    solo_pollfd_t *pfds = local_pfds;
+    size_t num_readers = 0;
+    size_t num_writers = 0;
+    size_t total_fds = 0;
+    size_t i, idx = 0;
     int timeout_ms = -1;
-    struct timeval tv;
-    struct timeval *ptv = NULL;
-    int num_readers = 0;
-    int num_writers = 0;
-    int i, ret;
-
-    FD_ZERO(&read_fds);
-    FD_ZERO(&write_fds);
-
-    if (lua_gettop(L) >= 3 && !lua_isnil(L, 3)) {
-        timeout_ms = (int)luaL_checkinteger(L, 3);
-        if (timeout_ms >= 0) {
-            tv.tv_sec = timeout_ms / 1000;
-            tv.tv_usec = (timeout_ms % 1000) * 1000;
-            ptv = &tv;
-        }
-    }
+    int ret;
+    int out_r_idx = 1;
+    int out_w_idx = 1;
 
     if (lua_istable(L, 1)) {
-        num_readers = (int)lua_rawlen(L, 1);
-        for (i = 1; i <= num_readers; i++) {
-            lsocket_t *s;
-            int fd;
-            lua_rawgeti(L, 1, i);
-            s = (lsocket_t *)luaL_testudata(L, -1, SOCKET_MT);
-            if (s != NULL && s->handle != NULL) {
-                fd = solo_socket_get_fd(s->handle);
-                if (fd >= 0) {
-                    FD_SET(fd, &read_fds);
-                    if (fd > max_fd) max_fd = fd;
-                }
-            }
-            lua_pop(L, 1);
-        }
+        num_readers = lua_rawlen(L, 1);
     }
-
     if (lua_istable(L, 2)) {
-        num_writers = (int)lua_rawlen(L, 2);
-        for (i = 1; i <= num_writers; i++) {
-            lsocket_t *s;
-            int fd;
-            lua_rawgeti(L, 2, i);
-            s = (lsocket_t *)luaL_testudata(L, -1, SOCKET_MT);
-            if (s != NULL && s->handle != NULL) {
-                fd = solo_socket_get_fd(s->handle);
-                if (fd >= 0) {
-                    FD_SET(fd, &write_fds);
-                    if (fd > max_fd) max_fd = fd;
-                }
-            }
-            lua_pop(L, 1);
+        num_writers = lua_rawlen(L, 2);
+    }
+    if (lua_gettop(L) >= 3 && !lua_isnil(L, 3)) {
+        timeout_ms = (int)luaL_checkinteger(L, 3);
+    }
+
+    total_fds = num_readers + num_writers;
+    if (total_fds > 16) {
+        pfds = (solo_pollfd_t *)malloc(total_fds * sizeof(solo_pollfd_t));
+        if (pfds == NULL) {
+            return luaL_error(L, "out of memory in select");
         }
     }
 
-    ret = select(max_fd + 1, &read_fds, &write_fds, NULL, ptv);
+    /* Collect reader sockets */
+    for (i = 1; i <= num_readers; i++) {
+        lsocket_t *s;
+        lua_rawgeti(L, 1, (lua_Integer)i);
+        s = (lsocket_t *)luaL_testudata(L, -1, SOCKET_MT);
+        if (s != NULL && s->handle != NULL) {
+            pfds[idx].sock = s->handle;
+            pfds[idx].events = SOLO_SOCK_POLL_READ;
+            pfds[idx].revents = 0;
+            idx++;
+        }
+        lua_pop(L, 1);
+    }
+
+    /* Collect writer sockets */
+    for (i = 1; i <= num_writers; i++) {
+        lsocket_t *s;
+        lua_rawgeti(L, 2, (lua_Integer)i);
+        s = (lsocket_t *)luaL_testudata(L, -1, SOCKET_MT);
+        if (s != NULL && s->handle != NULL) {
+            size_t j;
+            int found = 0;
+            for (j = 0; j < idx; j++) {
+                if (pfds[j].sock == s->handle) {
+                    pfds[j].events |= SOLO_SOCK_POLL_WRITE;
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) {
+                pfds[idx].sock = s->handle;
+                pfds[idx].events = SOLO_SOCK_POLL_WRITE;
+                pfds[idx].revents = 0;
+                idx++;
+            }
+        }
+        lua_pop(L, 1);
+    }
+
+    ret = solo_socket_poll(pfds, idx, timeout_ms);
     if (ret < 0) {
+        if (pfds != local_pfds) {
+            free(pfds);
+        }
         lua_pushnil(L);
         lua_pushstring(L, "select failed");
         return 2;
     }
 
-    lua_newtable(L);
-    if (ret > 0 && lua_istable(L, 1)) {
-        int out_idx = 1;
-        for (i = 1; i <= num_readers; i++) {
-            lsocket_t *s;
-            int fd;
-            lua_rawgeti(L, 1, i);
-            s = (lsocket_t *)luaL_testudata(L, -1, SOCKET_MT);
-            if (s != NULL && s->handle != NULL) {
-                fd = solo_socket_get_fd(s->handle);
-                if (fd >= 0 && FD_ISSET(fd, &read_fds)) {
-                    lua_pushvalue(L, -1);
-                    lua_rawseti(L, -3, out_idx++);
+    lua_newtable(L); /* ready readers */
+    lua_newtable(L); /* ready writers */
+
+    if (ret > 0) {
+        if (lua_istable(L, 1)) {
+            for (i = 1; i <= num_readers; i++) {
+                lsocket_t *s;
+                lua_rawgeti(L, 1, (lua_Integer)i);
+                s = (lsocket_t *)luaL_testudata(L, -1, SOCKET_MT);
+                if (s != NULL && s->handle != NULL) {
+                    size_t j;
+                    for (j = 0; j < idx; j++) {
+                        if (pfds[j].sock == s->handle &&
+                            (pfds[j].revents & (SOLO_SOCK_POLL_READ | SOLO_SOCK_POLL_ERR))) {
+                            lua_pushvalue(L, -1);
+                            lua_rawseti(L, -4, out_r_idx++);
+                            break;
+                        }
+                    }
                 }
+                lua_pop(L, 1);
             }
-            lua_pop(L, 1);
+        }
+
+        if (lua_istable(L, 2)) {
+            for (i = 1; i <= num_writers; i++) {
+                lsocket_t *s;
+                lua_rawgeti(L, 2, (lua_Integer)i);
+                s = (lsocket_t *)luaL_testudata(L, -1, SOCKET_MT);
+                if (s != NULL && s->handle != NULL) {
+                    size_t j;
+                    for (j = 0; j < idx; j++) {
+                        if (pfds[j].sock == s->handle &&
+                            (pfds[j].revents & (SOLO_SOCK_POLL_WRITE | SOLO_SOCK_POLL_ERR))) {
+                            lua_pushvalue(L, -1);
+                            lua_rawseti(L, -3, out_w_idx++);
+                            break;
+                        }
+                    }
+                }
+                lua_pop(L, 1);
+            }
         }
     }
 
-    lua_newtable(L);
-    if (ret > 0 && lua_istable(L, 2)) {
-        int out_idx = 1;
-        for (i = 1; i <= num_writers; i++) {
-            lsocket_t *s;
-            int fd;
-            lua_rawgeti(L, 2, i);
-            s = (lsocket_t *)luaL_testudata(L, -1, SOCKET_MT);
-            if (s != NULL && s->handle != NULL) {
-                fd = solo_socket_get_fd(s->handle);
-                if (fd >= 0 && FD_ISSET(fd, &write_fds)) {
-                    lua_pushvalue(L, -1);
-                    lua_rawseti(L, -3, out_idx++);
-                }
-            }
-            lua_pop(L, 1);
-        }
+    if (pfds != local_pfds) {
+        free(pfds);
     }
-
     return 2;
 }
 

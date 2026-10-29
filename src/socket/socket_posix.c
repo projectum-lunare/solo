@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include <solo/socket.h>
+#include "socket_internal.h"
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -39,13 +40,6 @@
 #ifndef NI_MAXSERV
 #define NI_MAXSERV 32
 #endif
-
-struct solo_socket {
-    int fd;
-    solo_socket_type_t type;
-    solo_socket_mode_t mode;
-    int timeout_ms;
-};
 
 solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char **err_msg)
 {
@@ -83,24 +77,11 @@ solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mo
     return sock;
 }
 
-solo_socket_t *solo_socket_tcp(solo_socket_mode_t mode, char **err_msg)
+void solo_socket_backend_close(solo_socket_t *sock)
 {
-    return solo_socket_create(SOLO_SOCK_TCP, mode, err_msg);
-}
-
-solo_socket_t *solo_socket_udp(solo_socket_mode_t mode, char **err_msg)
-{
-    return solo_socket_create(SOLO_SOCK_UDP, mode, err_msg);
-}
-
-void solo_socket_close(solo_socket_t *sock)
-{
-    if (sock != NULL) {
-        if (sock->fd >= 0) {
-            close(sock->fd);
-            sock->fd = -1;
-        }
-        free(sock);
+    if (sock != NULL && sock->fd >= 0) {
+        close(sock->fd);
+        sock->fd = -1;
     }
 }
 
@@ -126,10 +107,7 @@ solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host
     hints.ai_socktype = (sock->type == SOLO_SOCK_UDP) ? SOCK_DGRAM : SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
-    if (host != NULL &&
-        (strcmp(host, "0.0.0.0") == 0 || strcmp(host, "*") == 0 || host[0] == '\0')) {
-        host = NULL;
-    }
+    host = solo_socket_normalize_bind_host(host);
 
     status = getaddrinfo(host, port_str, &hints, &res);
     if (status != 0) {
@@ -163,36 +141,6 @@ solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host
     return SOLO_SOCK_OK;
 }
 
-solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_socket_mode_t mode, char **err_msg)
-{
-    solo_socket_t *sock = solo_socket_tcp(mode, err_msg);
-    if (sock == NULL) {
-        return NULL;
-    }
-
-    if (solo_socket_bind_sock(sock, host, port, backlog, err_msg) != SOLO_SOCK_OK) {
-        solo_socket_close(sock);
-        return NULL;
-    }
-
-    return sock;
-}
-
-solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
-{
-    solo_socket_t *sock = solo_socket_udp(mode, err_msg);
-    if (sock == NULL) {
-        return NULL;
-    }
-
-    if (solo_socket_bind_sock(sock, host, port, 0, err_msg) != SOLO_SOCK_OK) {
-        solo_socket_close(sock);
-        return NULL;
-    }
-
-    return sock;
-}
-
 solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg)
 {
     struct addrinfo hints;
@@ -209,9 +157,7 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
         return SOLO_SOCK_ERROR;
     }
 
-    if (host == NULL || host[0] == '\0') {
-        host = "127.0.0.1";
-    }
+    host = solo_socket_normalize_connect_host(host);
 
     sprintf(port_str, "%d", port);
 
@@ -248,23 +194,6 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
     }
 
     return SOLO_SOCK_OK;
-}
-
-solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
-{
-    solo_socket_t *sock = solo_socket_tcp(mode, err_msg);
-    solo_socket_status_t st;
-    if (sock == NULL) {
-        return NULL;
-    }
-
-    st = solo_socket_connect_sock(sock, host, port, err_msg);
-    if (st != SOLO_SOCK_OK && st != SOLO_SOCK_AGAIN) {
-        solo_socket_close(sock);
-        return NULL;
-    }
-
-    return sock;
 }
 
 solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t ip_len,
@@ -339,9 +268,9 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     return client_sock;
 }
 
-solo_socket_status_t solo_socket_send(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
+solo_socket_status_t solo_socket_backend_send(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
 {
-    size_t total = 0;
+    ssize_t n;
     if (sent != NULL) {
         *sent = 0;
     }
@@ -349,46 +278,19 @@ solo_socket_status_t solo_socket_send(solo_socket_t *sock, const char *buf, size
         return SOLO_SOCK_ERROR;
     }
 
-    if (sock->mode == SOLO_SOCK_NONBLOCKING) {
-        ssize_t n;
 #ifdef MSG_NOSIGNAL
-        n = send(sock->fd, buf, len, MSG_NOSIGNAL);
+    n = send(sock->fd, buf, len, MSG_NOSIGNAL);
 #else
-        n = write(sock->fd, buf, len);
+    n = write(sock->fd, buf, len);
 #endif
-        if (n < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                return SOLO_SOCK_AGAIN;
-            }
-            return SOLO_SOCK_ERROR;
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+            return SOLO_SOCK_AGAIN;
         }
-        if (sent != NULL) {
-            *sent = (size_t)n;
-        }
-        return SOLO_SOCK_OK;
+        return SOLO_SOCK_ERROR;
     }
-
-    while (total < len) {
-        ssize_t n;
-#ifdef MSG_NOSIGNAL
-        n = send(sock->fd, buf + total, len - total, MSG_NOSIGNAL);
-#else
-        n = write(sock->fd, buf + total, len - total);
-#endif
-        if (n < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return SOLO_SOCK_ERROR;
-        }
-        if (n == 0) {
-            break;
-        }
-        total += (size_t)n;
-    }
-
     if (sent != NULL) {
-        *sent = total;
+        *sent = (size_t)n;
     }
     return SOLO_SOCK_OK;
 }
@@ -425,16 +327,6 @@ solo_socket_status_t solo_socket_recv(solo_socket_t *sock, char *buf, size_t max
         *received = (size_t)n;
     }
     return SOLO_SOCK_OK;
-}
-
-solo_socket_status_t solo_socket_write(solo_socket_t *sock, const char *buf, size_t len, size_t *sent)
-{
-    return solo_socket_send(sock, buf, len, sent);
-}
-
-solo_socket_status_t solo_socket_read(solo_socket_t *sock, char *buf, size_t max_len, size_t *received)
-{
-    return solo_socket_recv(sock, buf, max_len, received);
 }
 
 solo_socket_status_t solo_socket_sendto(solo_socket_t *sock, const char *buf, size_t len,
@@ -549,12 +441,12 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
     return SOLO_SOCK_OK;
 }
 
-solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
 {
     int flags;
     if (sock == NULL || sock->fd < 0) {
         if (err_msg != NULL) {
-            *err_msg = safe_strdup("Invalid socket handle");
+            *err_msg = safe_strdup("invalid socket handle");
         }
         return SOLO_SOCK_ERROR;
     }
@@ -580,36 +472,20 @@ solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_
         return SOLO_SOCK_ERROR;
     }
 
-    sock->mode = mode;
     return SOLO_SOCK_OK;
 }
 
-solo_socket_mode_t solo_socket_get_mode(const solo_socket_t *sock)
-{
-    return sock ? sock->mode : SOLO_SOCK_BLOCKING;
-}
-
-solo_socket_type_t solo_socket_get_type(const solo_socket_t *sock)
-{
-    return sock ? sock->type : SOLO_SOCK_TCP;
-}
-
-solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
 {
     struct timeval tv;
     if (sock == NULL || sock->fd < 0) {
         if (err_msg != NULL) {
-            *err_msg = safe_strdup("Invalid socket handle");
+            *err_msg = safe_strdup("invalid socket handle");
         }
         return SOLO_SOCK_ERROR;
     }
 
-    if (timeout_ms < 0) {
-        timeout_ms = 0;
-    }
-
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    solo_socket_ms_to_timeval(timeout_ms, &tv.tv_sec, &tv.tv_usec);
 
     if (setsockopt(sock->fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
         if (err_msg != NULL) {
@@ -625,62 +501,76 @@ solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms
         return SOLO_SOCK_ERROR;
     }
 
-    sock->timeout_ms = timeout_ms;
     return SOLO_SOCK_OK;
 }
 
-int solo_socket_wait(solo_socket_t *sock, int events, int timeout_ms)
+int solo_socket_backend_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms)
 {
-    struct pollfd pfd;
+    struct pollfd local_pfd[16];
+    struct pollfd *pfds = local_pfd;
+    size_t i;
     int ret;
-    int ready_events = 0;
+    int ready_count = 0;
 
-    if (sock == NULL || sock->fd < 0) {
-        return SOLO_SOCK_ERROR;
+    if (fds == NULL || nfds == 0) {
+        return 0;
     }
 
-    pfd.fd = sock->fd;
-    pfd.events = 0;
-    pfd.revents = 0;
-
-    if (events & SOLO_SOCK_POLL_READ) {
-        pfd.events |= POLLIN;
+    if (nfds > 16) {
+        pfds = (struct pollfd *)malloc(nfds * sizeof(struct pollfd));
+        if (pfds == NULL) {
+            return SOLO_SOCK_ERROR;
+        }
     }
-    if (events & SOLO_SOCK_POLL_WRITE) {
-        pfd.events |= POLLOUT;
+
+    for (i = 0; i < nfds; i++) {
+        pfds[i].fd = SOLO_SOCK_FD(fds[i].sock);
+        pfds[i].events = 0;
+        pfds[i].revents = 0;
+        fds[i].revents = 0;
+        if (fds[i].events & SOLO_SOCK_POLL_READ) {
+            pfds[i].events |= POLLIN;
+        }
+        if (fds[i].events & SOLO_SOCK_POLL_WRITE) {
+            pfds[i].events |= POLLOUT;
+        }
     }
 
     while (1) {
-        ret = poll(&pfd, 1, timeout_ms);
+        ret = poll(pfds, (nfds_t)nfds, timeout_ms);
         if (ret < 0) {
             if (errno == EINTR) {
                 continue;
+            }
+            if (pfds != local_pfd) {
+                free(pfds);
             }
             return SOLO_SOCK_ERROR;
         }
         break;
     }
 
-    if (ret == 0) {
-        return 0; /* Timeout */
+    if (ret > 0) {
+        for (i = 0; i < nfds; i++) {
+            if (pfds[i].revents & (POLLIN | POLLHUP)) {
+                fds[i].revents |= SOLO_SOCK_POLL_READ;
+            }
+            if (pfds[i].revents & POLLOUT) {
+                fds[i].revents |= SOLO_SOCK_POLL_WRITE;
+            }
+            if (pfds[i].revents & (POLLERR | POLLNVAL)) {
+                fds[i].revents |= SOLO_SOCK_POLL_ERR;
+            }
+            if (fds[i].revents != 0) {
+                ready_count++;
+            }
+        }
     }
 
-    if (pfd.revents & (POLLIN | POLLHUP)) {
-        ready_events |= SOLO_SOCK_POLL_READ;
+    if (pfds != local_pfd) {
+        free(pfds);
     }
-    if (pfd.revents & POLLOUT) {
-        ready_events |= SOLO_SOCK_POLL_WRITE;
-    }
-    if (pfd.revents & (POLLERR | POLLNVAL)) {
-        ready_events |= SOLO_SOCK_POLL_ERR;
-    }
-
-    return ready_events;
-}
-
-int solo_socket_get_fd(const solo_socket_t *sock)
-{
-    return sock ? sock->fd : -1;
+    return ready_count;
 }
 
 #else

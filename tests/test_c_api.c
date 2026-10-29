@@ -35,9 +35,29 @@ TEST test_filesystem(void)
 TEST test_sandbox(void)
 {
     int version = 0;
+    solo_sandbox_backend_t b = solo_sandbox_backend(&version);
     const char *backend = solo_sandbox_backend_name(&version);
     ASSERT(backend != NULL);
     ASSERT(strlen(backend) > 0);
+    ASSERT(b >= SOLO_SANDBOX_BACKEND_NONE && b <= SOLO_SANDBOX_BACKEND_CAPSICUM);
+    PASS();
+}
+
+TEST test_sandbox_enums(void)
+{
+    ASSERT_EQ(0, SOLO_SANDBOX_BACKEND_NONE);
+    ASSERT_EQ(1, SOLO_SANDBOX_BACKEND_LANDLOCK);
+    ASSERT_EQ(2, SOLO_SANDBOX_BACKEND_OPENBSD);
+    ASSERT_EQ(3, SOLO_SANDBOX_BACKEND_CAPSICUM);
+
+    ASSERT_EQ(0, SOLO_SANDBOX_PERM_NONE);
+    ASSERT_EQ(1 << 0, SOLO_SANDBOX_PERM_READ);
+    ASSERT_EQ(1 << 1, SOLO_SANDBOX_PERM_WRITE);
+    ASSERT_EQ(1 << 2, SOLO_SANDBOX_PERM_EXEC);
+
+    ASSERT_EQ(0, SOLO_SANDBOX_OK);
+    ASSERT_EQ(-1, SOLO_SANDBOX_ERROR);
+    ASSERT_EQ(-2, SOLO_SANDBOX_UNSUPPORTED);
     PASS();
 }
 
@@ -525,11 +545,101 @@ TEST test_socket_ipv4_bind_any(void)
     PASS();
 }
 
+TEST test_socket_poll(void)
+{
+    char *err_msg = NULL;
+    int p1 = 19992;
+    int p2 = 19993;
+    solo_socket_t *s1 = NULL;
+    solo_socket_t *s2 = NULL;
+    solo_socket_t *cli = NULL;
+    solo_pollfd_t pfds[2];
+    size_t sent = 0;
+    int ready_count;
+    char buf[64];
+    size_t recvd = 0;
+
+    s1 = solo_socket_udp_bind("127.0.0.1", p1, SOLO_SOCK_NONBLOCKING, &err_msg);
+    if (!s1) {
+        if (err_msg) { free(err_msg); err_msg = NULL; }
+        p1 = 19994;
+        p2 = 19995;
+        s1 = solo_socket_udp_bind("127.0.0.1", p1, SOLO_SOCK_NONBLOCKING, &err_msg);
+    }
+    ASSERT(s1 != NULL);
+
+    s2 = solo_socket_udp_bind("127.0.0.1", p2, SOLO_SOCK_NONBLOCKING, &err_msg);
+    ASSERT(s2 != NULL);
+
+    cli = solo_socket_udp(SOLO_SOCK_BLOCKING, &err_msg);
+    ASSERT(cli != NULL);
+
+    /* Initially both are idle, timeout 50ms should return 0 */
+    pfds[0].sock = s1;
+    pfds[0].events = SOLO_SOCK_POLL_READ;
+    pfds[0].revents = 0;
+
+    pfds[1].sock = s2;
+    pfds[1].events = SOLO_SOCK_POLL_READ;
+    pfds[1].revents = 0;
+
+    ready_count = solo_socket_poll(pfds, 2, 50);
+    ASSERT_EQ(0, ready_count);
+    ASSERT_EQ(0, pfds[0].revents);
+    ASSERT_EQ(0, pfds[1].revents);
+
+    /* Send datagram only to s2 */
+    ASSERT_EQ(SOLO_SOCK_OK, solo_socket_sendto(cli, "ping_s2", 7, "127.0.0.1", p2, &sent));
+    ASSERT_EQ(7, sent);
+
+    /* Poll both: only s2 must be ready for read */
+    ready_count = solo_socket_poll(pfds, 2, 1000);
+    ASSERT_EQ(1, ready_count);
+    ASSERT_EQ(0, pfds[0].revents);
+    ASSERT(pfds[1].revents & SOLO_SOCK_POLL_READ);
+
+    /* Drain s2 */
+    ASSERT_EQ(SOLO_SOCK_OK, solo_socket_recvfrom(s2, buf, sizeof(buf), NULL, 0, NULL, &recvd));
+    ASSERT_EQ(7, recvd);
+
+    solo_socket_close(cli);
+    solo_socket_close(s2);
+    solo_socket_close(s1);
+    if (err_msg) free(err_msg);
+    PASS();
+}
+
+TEST test_sandbox_unsupported(void)
+{
+    char *err_msg = NULL;
+    solo_sandbox_status_t rc;
+
+#if SOLO_IS_LINUX
+    /* On Linux, Landlock does not support OpenBSD pledge(); must fail visibly with error message */
+    rc = solo_sandbox_pledge("stdio", &err_msg);
+    ASSERT_EQ(SOLO_SANDBOX_UNSUPPORTED, rc);
+    ASSERT(err_msg != NULL);
+    ASSERT(strlen(err_msg) > 0);
+    free(err_msg);
+    err_msg = NULL;
+#elif !SOLO_IS_OPENBSD
+    /* On stubs or non-OpenBSD, pledge must fail visibly with SOLO_SANDBOX_UNSUPPORTED */
+    rc = solo_sandbox_pledge("stdio", &err_msg);
+    ASSERT_EQ(SOLO_SANDBOX_UNSUPPORTED, rc);
+    ASSERT(err_msg != NULL);
+    free(err_msg);
+    err_msg = NULL;
+#endif
+    PASS();
+}
+
 SUITE(c_api_suite)
 {
     RUN_TEST(test_platform);
     RUN_TEST(test_filesystem);
     RUN_TEST(test_sandbox);
+    RUN_TEST(test_sandbox_enums);
+    RUN_TEST(test_sandbox_unsupported);
     RUN_TEST(test_socket_enums);
     RUN_TEST(test_socket_tcp_sync);
     RUN_TEST(test_socket_tcp_async);
@@ -539,6 +649,7 @@ SUITE(c_api_suite)
     RUN_TEST(test_socket_err_msg_ownership);
     RUN_TEST(test_socket_ipv4_localhost);
     RUN_TEST(test_socket_ipv4_bind_any);
+    RUN_TEST(test_socket_poll);
 }
 
 GREATEST_MAIN_DEFS();

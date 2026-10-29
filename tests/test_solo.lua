@@ -100,6 +100,59 @@ describe("solo.sandbox (Kernel Security & Isolation)", function()
         assert_eq(type(s.unveil(".", "r")), "boolean")
         assert_eq(type(s.pledge("stdio rpath")), "boolean")
     end)
+
+    test("defines sandbox backend, perm and status enum tables", function()
+        assert_true(s.backend ~= nil)
+        assert_eq(s.backend.NONE, 0)
+        assert_eq(s.backend.LANDLOCK, 1)
+        assert_eq(s.backend.OPENBSD, 2)
+        assert_eq(s.backend.CAPSICUM, 3)
+
+        assert_true(s.perm ~= nil)
+        assert_eq(s.perm.NONE, 0)
+        assert_eq(s.perm.READ, 1)
+        assert_eq(s.perm.WRITE, 2)
+        assert_eq(s.perm.EXEC, 4)
+
+        assert_true(s.status ~= nil)
+        assert_eq(s.status.OK, 0)
+        assert_eq(s.status.ERROR, -1)
+        assert_eq(s.status.UNSUPPORTED, -2)
+
+        assert_eq(s.READ, 1)
+        assert_eq(s.WRITE, 2)
+        assert_eq(s.EXEC, 4)
+    end)
+
+    test("unveil accepts both string and integer enum permissions", function()
+        assert_eq(type(s.unveil(".", "r")), "boolean")
+        assert_eq(type(s.unveil(".", s.perm.READ)), "boolean")
+    end)
+
+    test("unsupported sandbox operations fail visibly with explanatory error", function()
+        if solo.platform.is_linux then
+            local ok, err, code = s.pledge("stdio")
+            assert_false(ok)
+            assert_eq(type(err), "string")
+            assert_true(#err > 0)
+            assert_eq(code, s.status.UNSUPPORTED)
+        elseif not s.is_supported() then
+            local ok_u, err_u, code_u = s.unveil(".", "r")
+            assert_false(ok_u)
+            assert_eq(type(err_u), "string")
+            assert_eq(code_u, s.status.UNSUPPORTED)
+
+            local ok_p, err_p, code_p = s.pledge("stdio")
+            assert_false(ok_p)
+            assert_eq(type(err_p), "string")
+            assert_eq(code_p, s.status.UNSUPPORTED)
+
+            local ok_l, err_l, code_l = s.lock()
+            assert_false(ok_l)
+            assert_eq(type(err_l), "string")
+            assert_eq(code_l, s.status.UNSUPPORTED)
+        end
+    end)
 end)
 
 describe("solo.parallel & solo.serial (Physical Device Driver Signatures)", function()
@@ -291,6 +344,37 @@ describe("solo.socket (Network Sockets & Multiplexing)", function()
 
         u_cli:close()
         async_udp:close()
+    end)
+
+    test("multiplexes multiple readers and writers with select()", function()
+        local p1, p2 = 19988, 19989
+        local u1 = sock.udp_bind("127.0.0.1", p1, sock.mode.NONBLOCKING)
+        if not u1 then
+            p1, p2 = 19996, 19997
+            u1 = sock.udp_bind("127.0.0.1", p1, sock.mode.NONBLOCKING)
+        end
+        local u2 = sock.udp_bind("127.0.0.1", p2, sock.mode.NONBLOCKING)
+        local sender = sock.udp()
+
+        -- Neither u1 nor u2 has data to read; sender is ready to write
+        local r_ready, w_ready = sock.select({ u1, u2 }, { sender }, 20)
+        assert_eq(#r_ready, 0)
+        assert_eq(#w_ready, 1)
+        assert_eq(w_ready[1], sender)
+
+        -- Send data to u1 only
+        sender:sendto("multitest", "127.0.0.1", p1)
+
+        r_ready, w_ready = sock.select({ u1, u2 }, nil, 1000)
+        assert_eq(#r_ready, 1)
+        assert_eq(r_ready[1], u1)
+
+        local data = u1:recvfrom(64)
+        assert_eq(data, "multitest")
+
+        sender:close()
+        u2:close()
+        u1:close()
     end)
 
     test("honors socket timeout configuration", function()

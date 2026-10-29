@@ -35,7 +35,8 @@ target("solo_static")
     add_files(
         "src/solo.c",
         "src/platform/platform.c",
-        "src/filesystem/filesystem.c"
+        "src/filesystem/filesystem.c",
+        "src/socket/socket_common.c"
     )
     add_headerfiles("include/(solo/*.h)")
 
@@ -188,7 +189,7 @@ local submodules = {
     fs         = {"src/filesystem/filesystem_lua.c", "src/filesystem/filesystem.c", "src/platform/platform.c"},
     serial     = {"src/serial/serial_lua.c", serial_driver, "src/platform/platform.c"},
     parallel   = {"src/parallel/parallel_lua.c", parallel_driver, "src/platform/platform.c"},
-    socket     = {"src/socket/socket_lua.c", socket_driver, "src/platform/platform.c"},
+    socket     = {"src/socket/socket_lua.c", "src/socket/socket_common.c", socket_driver, "src/platform/platform.c"},
     sandbox    = {"src/sandbox/sandbox_lua.c", sandbox_driver, "src/platform/platform.c"},
 }
 

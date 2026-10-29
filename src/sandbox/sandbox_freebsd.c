@@ -26,7 +26,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-const char *solo_sandbox_backend_name(int *version_out)
+solo_sandbox_backend_t solo_sandbox_backend(int *version_out)
 {
     if (version_out != NULL) {
 #if defined(__FreeBSD_version)
@@ -35,10 +35,16 @@ const char *solo_sandbox_backend_name(int *version_out)
         *version_out = 1;
 #endif
     }
+    return SOLO_SANDBOX_BACKEND_CAPSICUM;
+}
+
+const char *solo_sandbox_backend_name(int *version_out)
+{
+    solo_sandbox_backend(version_out);
     return "capsicum";
 }
 
-int solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
+solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
 {
     /*
      * Under FreeBSD Capsicum, capability mode restricts path-based lookups after cap_enter().
@@ -48,22 +54,22 @@ int solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
     int mode = F_OK;
 
     if (path == NULL || path[0] == '\0') {
-        return 0;
+        return SOLO_SANDBOX_OK;
     }
 
-    if (permissions & SOLO_SANDBOX_READ) {
+    if (permissions & SOLO_SANDBOX_PERM_READ) {
         mode |= R_OK;
     }
-    if (permissions & SOLO_SANDBOX_WRITE) {
+    if (permissions & SOLO_SANDBOX_PERM_WRITE) {
         mode |= W_OK;
     }
-    if (permissions & SOLO_SANDBOX_EXEC) {
+    if (permissions & SOLO_SANDBOX_PERM_EXEC) {
         mode |= X_OK;
     }
 
     if (access(path, mode) != 0) {
         /* If write was requested on a non-existing file, check parent directory */
-        if ((permissions & SOLO_SANDBOX_WRITE) && errno == ENOENT) {
+        if ((permissions & SOLO_SANDBOX_PERM_WRITE) && errno == ENOENT) {
             char dir_buf[1024];
             char *slash;
             size_t len = strlen(path);
@@ -79,11 +85,11 @@ int solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
                     *slash = '\0';
                 }
                 if (access(dir_buf, W_OK) == 0) {
-                    return 0;
+                    return SOLO_SANDBOX_OK;
                 }
             } else {
                 if (access(".", W_OK) == 0) {
-                    return 0;
+                    return SOLO_SANDBOX_OK;
                 }
             }
         }
@@ -92,34 +98,38 @@ int solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
             sprintf(buf, "access(%.128s) check failed: %s", path, strerror(errno));
             *err_msg = safe_strdup(buf);
         }
-        return -1;
+        return SOLO_SANDBOX_ERROR;
     }
 
-    return 0;
+    return SOLO_SANDBOX_OK;
 }
 
-int solo_sandbox_lock(char **err_msg)
+solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
 {
     if (cap_enter() != 0) {
         if (errno == ENOSYS) {
-            /* Kernel was compiled without options CAPABILITIES; degrade gracefully */
-            return 0;
+            if (err_msg != NULL) {
+                *err_msg = safe_strdup("Capsicum capability mode is not supported by the running FreeBSD kernel");
+            }
+            return SOLO_SANDBOX_UNSUPPORTED;
         }
         if (err_msg != NULL) {
             char buf[128];
             sprintf(buf, "cap_enter() failed (%s)", strerror(errno));
             *err_msg = safe_strdup(buf);
         }
-        return -1;
+        return SOLO_SANDBOX_ERROR;
     }
-    return 0;
+    return SOLO_SANDBOX_OK;
 }
 
-int solo_sandbox_pledge(const char *promises, char **err_msg)
+solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char **err_msg)
 {
     (void)promises;
-    (void)err_msg;
-    return 0;
+    if (err_msg != NULL) {
+        *err_msg = safe_strdup("pledge is not supported on FreeBSD (Capsicum does not support pledge)");
+    }
+    return SOLO_SANDBOX_UNSUPPORTED;
 }
 
 #endif /* SOLO_IS_FREEBSD || defined(__FreeBSD__) */

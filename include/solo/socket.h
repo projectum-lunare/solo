@@ -117,11 +117,18 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
  * Mode, Timeout & Polling
  * On error, functions accepting err_msg return SOLO_SOCK_ERROR and populate *err_msg (caller must free()).
  */
+typedef struct solo_pollfd {
+    solo_socket_t *sock;
+    int events;      /* Input:  SOLO_SOCK_POLL_READ | SOLO_SOCK_POLL_WRITE */
+    int revents;     /* Output: SOLO_SOCK_POLL_READ | SOLO_SOCK_POLL_WRITE | SOLO_SOCK_POLL_ERR */
+} solo_pollfd_t;
+
 solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg);
 solo_socket_mode_t solo_socket_get_mode(const solo_socket_t *sock);
 solo_socket_type_t solo_socket_get_type(const solo_socket_t *sock);
 solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg);
 int solo_socket_wait(solo_socket_t *sock, int events, int timeout_ms);
+int solo_socket_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms);
 int solo_socket_get_fd(const solo_socket_t *sock);
 
 #ifdef __cplusplus
