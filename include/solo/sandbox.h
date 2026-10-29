@@ -30,21 +30,24 @@ const char *solo_sandbox_backend_name(int *version_out);
 
 /*
  * Unveils a filesystem path with given permissions (read/write/exec).
- * Returns 0 on success, or -1 on error (with err_msg populated).
+ * Returns 0 on success, or -1 on error (with *err_msg dynamically allocated
+ * if err_msg != NULL; the caller owns this string and must release it with free()).
  */
 int solo_sandbox_unveil(const char *path, int permissions, char **err_msg);
 
 /*
  * Locks the sandbox, enforcing the restrictions on the current process.
  * After locking, no further paths can be unveiled.
- * Returns 0 on success, or -1 on error (with err_msg populated).
+ * Returns 0 on success, or -1 on error (with *err_msg dynamically allocated
+ * if err_msg != NULL; the caller owns this string and must release it with free()).
  */
 int solo_sandbox_lock(char **err_msg);
 
 /*
  * Pledges a set of system call promises (e.g. "stdio rpath wpath").
  * On platforms supporting pledge (OpenBSD), enforces the promises.
- * On other platforms, returns 0.
+ * On other platforms, returns 0. If an error occurs, returns -1 and populates
+ * *err_msg dynamically (if err_msg != NULL; caller must release it with free()).
  */
 int solo_sandbox_pledge(const char *promises, char **err_msg);
 

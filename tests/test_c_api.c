@@ -77,6 +77,10 @@ TEST test_socket_tcp_sync(void)
 
     server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
     if (!server) {
+        if (err_msg != NULL) {
+            free(err_msg);
+            err_msg = NULL;
+        }
         port = 19931;
         server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
     }
@@ -84,10 +88,18 @@ TEST test_socket_tcp_sync(void)
     ASSERT_EQ(SOLO_SOCK_TCP, solo_socket_get_type(server));
     ASSERT_EQ(SOLO_SOCK_BLOCKING, solo_socket_get_mode(server));
 
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
     ASSERT(client != NULL);
     ASSERT_EQ(SOLO_SOCK_TCP, solo_socket_get_type(client));
 
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, &err_msg);
     ASSERT(accepted != NULL);
 
@@ -104,6 +116,10 @@ TEST test_socket_tcp_sync(void)
     solo_socket_close(client);
     solo_socket_close(accepted);
     solo_socket_close(server);
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     PASS();
 }
 
@@ -125,13 +141,20 @@ TEST test_socket_tcp_async(void)
 
     server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_NONBLOCKING, &err_msg);
     if (!server) {
+        if (err_msg != NULL) {
+            free(err_msg);
+            err_msg = NULL;
+        }
         port = 19941;
         server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_NONBLOCKING, &err_msg);
     }
     ASSERT(server != NULL);
     ASSERT_EQ(SOLO_SOCK_NONBLOCKING, solo_socket_get_mode(server));
 
-    err_msg = NULL;
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, &err_msg);
     ASSERT(accepted == NULL);
     ASSERT(err_msg == NULL);
@@ -142,6 +165,10 @@ TEST test_socket_tcp_async(void)
     ev = solo_socket_wait(server, SOLO_SOCK_POLL_READ, 1000);
     ASSERT(ev & SOLO_SOCK_POLL_READ);
 
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, &err_msg);
     ASSERT(accepted != NULL);
     ASSERT_EQ(SOLO_SOCK_NONBLOCKING, solo_socket_get_mode(accepted));
@@ -166,6 +193,10 @@ TEST test_socket_tcp_async(void)
     solo_socket_close(client);
     solo_socket_close(accepted);
     solo_socket_close(server);
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     PASS();
 }
 
@@ -186,12 +217,20 @@ TEST test_socket_udp_sync(void)
 
     server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
     if (!server) {
+        if (err_msg != NULL) {
+            free(err_msg);
+            err_msg = NULL;
+        }
         port = 19951;
         server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
     }
     ASSERT(server != NULL);
     ASSERT_EQ(SOLO_SOCK_UDP, solo_socket_get_type(server));
 
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     client = solo_socket_udp(SOLO_SOCK_BLOCKING, &err_msg);
     ASSERT(client != NULL);
     ASSERT_EQ(SOLO_SOCK_UDP, solo_socket_get_type(client));
@@ -220,6 +259,10 @@ TEST test_socket_udp_sync(void)
 
     solo_socket_close(client);
     solo_socket_close(server);
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     PASS();
 }
 
@@ -238,6 +281,10 @@ TEST test_socket_udp_async(void)
 
     server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_NONBLOCKING, &err_msg);
     if (!server) {
+        if (err_msg != NULL) {
+            free(err_msg);
+            err_msg = NULL;
+        }
         port = 19961;
         server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_NONBLOCKING, &err_msg);
     }
@@ -251,6 +298,10 @@ TEST test_socket_udp_async(void)
     ev = solo_socket_wait(server, SOLO_SOCK_POLL_READ, 50);
     ASSERT_EQ(0, ev);
 
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     client = solo_socket_udp(SOLO_SOCK_BLOCKING, &err_msg);
     ASSERT(client != NULL);
     st = solo_socket_sendto(client, msg, strlen(msg), "127.0.0.1", port, &sent);
@@ -268,6 +319,10 @@ TEST test_socket_udp_async(void)
 
     solo_socket_close(client);
     solo_socket_close(server);
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     PASS();
 }
 
@@ -284,17 +339,33 @@ TEST test_socket_timeout(void)
 
     server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
     if (!server) {
+        if (err_msg != NULL) {
+            free(err_msg);
+            err_msg = NULL;
+        }
         port = 19971;
         server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
     }
     ASSERT(server != NULL);
 
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
     ASSERT(client != NULL);
 
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     accepted = solo_socket_accept(server, NULL, 0, NULL, &err_msg);
     ASSERT(accepted != NULL);
 
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     ASSERT_EQ(SOLO_SOCK_OK, solo_socket_set_timeout(accepted, 100, &err_msg));
 
     st = solo_socket_recv(accepted, buf, sizeof(buf), &received);
@@ -304,6 +375,153 @@ TEST test_socket_timeout(void)
     solo_socket_close(client);
     solo_socket_close(accepted);
     solo_socket_close(server);
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
+    PASS();
+}
+
+TEST test_socket_err_msg_ownership(void)
+{
+    char *err_msg = NULL;
+    solo_socket_status_t st;
+    solo_socket_t *sock;
+
+    /* Invalid handle to solo_socket_set_mode must populate *err_msg */
+    st = solo_socket_set_mode(NULL, SOLO_SOCK_BLOCKING, &err_msg);
+    ASSERT_EQ(SOLO_SOCK_ERROR, st);
+    ASSERT(err_msg != NULL);
+    ASSERT(strlen(err_msg) > 0);
+    free(err_msg);
+    err_msg = NULL;
+
+    /* Invalid handle to solo_socket_set_timeout must populate *err_msg */
+    st = solo_socket_set_timeout(NULL, 1000, &err_msg);
+    ASSERT_EQ(SOLO_SOCK_ERROR, st);
+    ASSERT(err_msg != NULL);
+    ASSERT(strlen(err_msg) > 0);
+    free(err_msg);
+    err_msg = NULL;
+
+    /* Invalid handle to solo_socket_connect_sock */
+    st = solo_socket_connect_sock(NULL, "127.0.0.1", 80, &err_msg);
+    ASSERT_EQ(SOLO_SOCK_ERROR, st);
+    ASSERT(err_msg != NULL);
+    ASSERT(strlen(err_msg) > 0);
+    free(err_msg);
+    err_msg = NULL;
+
+    /* Invalid handle to solo_socket_bind_sock */
+    st = solo_socket_bind_sock(NULL, "127.0.0.1", 80, 5, &err_msg);
+    ASSERT_EQ(SOLO_SOCK_ERROR, st);
+    ASSERT(err_msg != NULL);
+    ASSERT(strlen(err_msg) > 0);
+    free(err_msg);
+    err_msg = NULL;
+
+    /* Invalid handle to solo_socket_accept */
+    sock = solo_socket_accept(NULL, NULL, 0, NULL, &err_msg);
+    ASSERT(sock == NULL);
+    ASSERT(err_msg != NULL);
+    ASSERT(strlen(err_msg) > 0);
+    free(err_msg);
+    err_msg = NULL;
+
+    /* Invalid address to solo_socket_bind */
+    sock = solo_socket_bind("999.999.999.999", 80, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    ASSERT(sock == NULL);
+    ASSERT(err_msg != NULL);
+    ASSERT(strlen(err_msg) > 0);
+    free(err_msg);
+    err_msg = NULL;
+
+    PASS();
+}
+
+TEST test_socket_ipv4_localhost(void)
+{
+    char *err_msg = NULL;
+    int port = 19980;
+    solo_socket_t *server;
+    solo_socket_t *client;
+    solo_socket_t *accepted;
+
+    server = solo_socket_bind("localhost", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    if (!server) {
+        if (err_msg != NULL) {
+            free(err_msg);
+            err_msg = NULL;
+        }
+        port = 19981;
+        server = solo_socket_bind("localhost", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    }
+    ASSERT(server != NULL);
+
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
+    client = solo_socket_connect("localhost", port, SOLO_SOCK_BLOCKING, &err_msg);
+    ASSERT(client != NULL);
+
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
+    accepted = solo_socket_accept(server, NULL, 0, NULL, &err_msg);
+    ASSERT(accepted != NULL);
+
+    solo_socket_close(client);
+    solo_socket_close(accepted);
+    solo_socket_close(server);
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
+    PASS();
+}
+
+TEST test_socket_ipv4_bind_any(void)
+{
+    char *err_msg = NULL;
+    int port = 19985;
+    solo_socket_t *server;
+    solo_socket_t *client;
+    solo_socket_t *accepted;
+
+    server = solo_socket_bind(NULL, port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    if (!server) {
+        if (err_msg != NULL) {
+            free(err_msg);
+            err_msg = NULL;
+        }
+        port = 19986;
+        server = solo_socket_bind(NULL, port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    }
+    ASSERT(server != NULL);
+
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
+    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    ASSERT(client != NULL);
+
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
+    accepted = solo_socket_accept(server, NULL, 0, NULL, &err_msg);
+    ASSERT(accepted != NULL);
+
+    solo_socket_close(client);
+    solo_socket_close(accepted);
+    solo_socket_close(server);
+    if (err_msg != NULL) {
+        free(err_msg);
+        err_msg = NULL;
+    }
     PASS();
 }
 
@@ -318,6 +536,9 @@ SUITE(c_api_suite)
     RUN_TEST(test_socket_udp_sync);
     RUN_TEST(test_socket_udp_async);
     RUN_TEST(test_socket_timeout);
+    RUN_TEST(test_socket_err_msg_ownership);
+    RUN_TEST(test_socket_ipv4_localhost);
+    RUN_TEST(test_socket_ipv4_bind_any);
 }
 
 GREATEST_MAIN_DEFS();

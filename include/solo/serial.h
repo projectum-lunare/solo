@@ -33,6 +33,9 @@ typedef struct {
  * Opens a serial port for communication with impact printers.
  * Supports hardware flow control (RTS/CTS) and software flow control (XON/XOFF),
  * as well as initial modem line configuration for RTS and DTR.
+ * On failure, returns NULL and populates *err_msg with a dynamically
+ * allocated string (if err_msg != NULL). The caller owns the string and
+ * must release it with free().
  */
 solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg);
 

@@ -58,7 +58,18 @@ typedef enum solo_socket_event {
 } solo_socket_event_t;
 
 /*
+ * Error Reporting & Dynamic Memory Ownership:
+ * All socket functions accepting a `char **err_msg` argument will dynamically
+ * allocate a null-terminated string describing the failure when an error occurs
+ * and `err_msg` is non-NULL.
+ * The CALLER assumes ownership of this string and is responsible for freeing it
+ * using free().
+ * If no error occurs, `*err_msg` is not allocated (set to NULL or unchanged).
+ */
+
+/*
  * Lifecycle & Creation
+ * On error, returns NULL and populates *err_msg (caller must free()).
  */
 solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char **err_msg);
 solo_socket_t *solo_socket_tcp(solo_socket_mode_t mode, char **err_msg);
@@ -67,6 +78,7 @@ void solo_socket_close(solo_socket_t *sock);
 
 /*
  * Quick Setup (Connect & Bind)
+ * On error, returns NULL and populates *err_msg (caller must free()).
  */
 solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char **err_msg);
 solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_socket_mode_t mode, char **err_msg);
@@ -74,6 +86,7 @@ solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode
 
 /*
  * Operations on existing socket
+ * On error, returns SOLO_SOCK_ERROR (or NULL for accept) and populates *err_msg (caller must free()).
  */
 solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg);
 solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg);
@@ -102,6 +115,7 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
 
 /*
  * Mode, Timeout & Polling
+ * On error, functions accepting err_msg return SOLO_SOCK_ERROR and populate *err_msg (caller must free()).
  */
 solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg);
 solo_socket_mode_t solo_socket_get_mode(const solo_socket_t *sock);

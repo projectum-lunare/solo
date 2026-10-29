@@ -22,6 +22,9 @@ typedef struct parallel_port solo_parallel_t;
 /*
  * Opens a parallel / Centronics port (IEEE 1284 / LPT) for direct
  * communication with impact printers.
+ * On failure, returns NULL and populates *err_msg with a dynamically
+ * allocated string (if err_msg != NULL). The caller owns the string and
+ * must release it with free().
  */
 solo_parallel_t *solo_parallel_open(const char *path, char **err_msg);
 
