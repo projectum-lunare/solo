@@ -1,8 +1,3 @@
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#include <unistd.h>
-#include <sys/syscall.h>
 /*
  * solo - Physical I/O, System Foundations & Hardware Abstractions
  * Projectum Lunare <https://github.com/projectum-lunare/solo>
@@ -12,6 +7,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
 #include <solo/platform.h>
 #include <solo/sandbox.h>
@@ -23,32 +22,41 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/syscall.h>
+#if defined(__has_include)
+#if __has_include(<asm/unistd.h>)
+#include <asm/unistd.h>
+#endif
+#else
+#include <asm/unistd.h>
+#endif
 #include <sys/prctl.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 
+/*
+ * Landlock system call numbers fallback definition.
+ * Prioritizes kernel UAPI / libc headers from <sys/syscall.h> and <asm/unistd.h>.
+ * Only if __NR_landlock_create_ruleset is still undefined do we apply per-arch constants:
+ *   - x86_64, aarch64, riscv: 444, 445, 446
+ *   - i386: 435, 436, 437
+ *   - arm (EABI): 442, 443, 444
+ * Any unverified architecture is left undefined so probe_landlock_abi() returns
+ * SOLO_SANDBOX_UNSUPPORTED instead of calling an arbitrary system call.
+ */
 #ifndef __NR_landlock_create_ruleset
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(__aarch64__) || defined(__riscv)
 #define __NR_landlock_create_ruleset 444
 #define __NR_landlock_add_rule       445
 #define __NR_landlock_restrict_self  446
 #elif defined(__i386__)
-#define __NR_landlock_create_ruleset 444
-#define __NR_landlock_add_rule       445
-#define __NR_landlock_restrict_self  446
-#elif defined(__aarch64__)
-#define __NR_landlock_create_ruleset 444
-#define __NR_landlock_add_rule       445
-#define __NR_landlock_restrict_self  446
+#define __NR_landlock_create_ruleset 435
+#define __NR_landlock_add_rule       436
+#define __NR_landlock_restrict_self  437
 #elif defined(__arm__)
-#define __NR_landlock_create_ruleset 444
-#define __NR_landlock_add_rule       445
-#define __NR_landlock_restrict_self  446
-#elif defined(__riscv)
-#define __NR_landlock_create_ruleset 444
-#define __NR_landlock_add_rule       445
-#define __NR_landlock_restrict_self  446
+#define __NR_landlock_create_ruleset 442
+#define __NR_landlock_add_rule       443
+#define __NR_landlock_restrict_self  444
 #endif
 #endif
 
@@ -66,6 +74,43 @@
 
 #define LANDLOCK_CREATE_RULESET_VERSION (1U << 0)
 #define LANDLOCK_RULE_PATH_BENEATH      1
+
+/*
+ * Landlock access rights flags (Linux kernel UAPI).
+ * Symbolic constants are used instead of opaque magic hex numbers to prevent
+ * ABI desynchronization across kernel versions.
+ */
+#define SOLO_LANDLOCK_ACCESS_FS_EXECUTE     (1ULL << 0)
+#define SOLO_LANDLOCK_ACCESS_FS_WRITE_FILE  (1ULL << 1)
+#define SOLO_LANDLOCK_ACCESS_FS_READ_FILE   (1ULL << 2)
+#define SOLO_LANDLOCK_ACCESS_FS_READ_DIR    (1ULL << 3)
+#define SOLO_LANDLOCK_ACCESS_FS_REMOVE_DIR  (1ULL << 4)
+#define SOLO_LANDLOCK_ACCESS_FS_REMOVE_FILE (1ULL << 5)
+#define SOLO_LANDLOCK_ACCESS_FS_MAKE_CHAR   (1ULL << 6)
+#define SOLO_LANDLOCK_ACCESS_FS_MAKE_DIR    (1ULL << 7)
+#define SOLO_LANDLOCK_ACCESS_FS_MAKE_REG    (1ULL << 8)
+#define SOLO_LANDLOCK_ACCESS_FS_MAKE_SOCK   (1ULL << 9)
+#define SOLO_LANDLOCK_ACCESS_FS_MAKE_FIFO   (1ULL << 10)
+#define SOLO_LANDLOCK_ACCESS_FS_MAKE_BLOCK  (1ULL << 11)
+#define SOLO_LANDLOCK_ACCESS_FS_MAKE_SYM    (1ULL << 12)
+#define SOLO_LANDLOCK_ACCESS_FS_REFER       (1ULL << 13) /* ABI >= 2 */
+#define SOLO_LANDLOCK_ACCESS_FS_TRUNCATE    (1ULL << 14) /* ABI >= 3 */
+#define SOLO_LANDLOCK_ACCESS_FS_IOCTL_DEV   (1ULL << 15) /* ABI >= 5 */
+
+#define SOLO_LANDLOCK_FS_MASK_V1 ( \
+    SOLO_LANDLOCK_ACCESS_FS_EXECUTE | \
+    SOLO_LANDLOCK_ACCESS_FS_WRITE_FILE | \
+    SOLO_LANDLOCK_ACCESS_FS_READ_FILE | \
+    SOLO_LANDLOCK_ACCESS_FS_READ_DIR | \
+    SOLO_LANDLOCK_ACCESS_FS_REMOVE_DIR | \
+    SOLO_LANDLOCK_ACCESS_FS_REMOVE_FILE | \
+    SOLO_LANDLOCK_ACCESS_FS_MAKE_CHAR | \
+    SOLO_LANDLOCK_ACCESS_FS_MAKE_DIR | \
+    SOLO_LANDLOCK_ACCESS_FS_MAKE_REG | \
+    SOLO_LANDLOCK_ACCESS_FS_MAKE_SOCK | \
+    SOLO_LANDLOCK_ACCESS_FS_MAKE_FIFO | \
+    SOLO_LANDLOCK_ACCESS_FS_MAKE_BLOCK | \
+    SOLO_LANDLOCK_ACCESS_FS_MAKE_SYM)
 
 struct landlock_ruleset_attr {
 #if defined(__GNUC__)
@@ -107,17 +152,67 @@ static int probe_landlock_abi(void)
 #endif
 }
 
+/*
+ * Returns the Landlock filesystem access mask supported by the running kernel.
+ * Caps at known filesystem flags up to ABI 5, ensuring forward-compatibility
+ * when running under newer kernels with ABI >= 6 (which add IPC scoping, etc.).
+ */
 static unsigned long get_fs_mask(int abi)
 {
-    if (abi >= 5) {
-        return 0xffffUL;
-    } else if (abi >= 3) {
-        return 0x7fffUL;
-    } else if (abi >= 2) {
-        return 0x3fffUL;
-    } else {
-        return 0x1fffUL;
+    unsigned long mask = SOLO_LANDLOCK_FS_MASK_V1;
+
+    if (abi >= 2) {
+        mask |= SOLO_LANDLOCK_ACCESS_FS_REFER;
     }
+    if (abi >= 3) {
+        mask |= SOLO_LANDLOCK_ACCESS_FS_TRUNCATE;
+    }
+    if (abi >= 5) {
+        mask |= SOLO_LANDLOCK_ACCESS_FS_IOCTL_DEV;
+    }
+    return mask;
+}
+
+/*
+ * Computes Landlock access rights for an unveiled path given permissions and node type.
+ */
+static unsigned long compute_access_rights(int abi, int permissions, int is_dir)
+{
+    unsigned long rights = 0;
+
+    if (permissions & SOLO_SANDBOX_PERM_READ) {
+        rights |= SOLO_LANDLOCK_ACCESS_FS_READ_FILE;
+        if (is_dir) {
+            rights |= SOLO_LANDLOCK_ACCESS_FS_READ_DIR;
+        }
+    }
+    if (permissions & SOLO_SANDBOX_PERM_WRITE) {
+        rights |= SOLO_LANDLOCK_ACCESS_FS_WRITE_FILE;
+        if (abi >= 3) {
+            rights |= SOLO_LANDLOCK_ACCESS_FS_TRUNCATE;
+        }
+        if (abi >= 5 && !is_dir) {
+            rights |= SOLO_LANDLOCK_ACCESS_FS_IOCTL_DEV;
+        }
+        if (is_dir) {
+            rights |= SOLO_LANDLOCK_ACCESS_FS_REMOVE_DIR
+                   |  SOLO_LANDLOCK_ACCESS_FS_REMOVE_FILE
+                   |  SOLO_LANDLOCK_ACCESS_FS_MAKE_DIR
+                   |  SOLO_LANDLOCK_ACCESS_FS_MAKE_REG
+                   |  SOLO_LANDLOCK_ACCESS_FS_MAKE_SOCK
+                   |  SOLO_LANDLOCK_ACCESS_FS_MAKE_FIFO
+                   |  SOLO_LANDLOCK_ACCESS_FS_MAKE_BLOCK
+                   |  SOLO_LANDLOCK_ACCESS_FS_MAKE_SYM;
+            if (abi >= 2) {
+                rights |= SOLO_LANDLOCK_ACCESS_FS_REFER;
+            }
+        }
+    }
+    if (permissions & SOLO_SANDBOX_PERM_EXEC) {
+        rights |= SOLO_LANDLOCK_ACCESS_FS_EXECUTE;
+    }
+
+    return rights & get_fs_mask(abi);
 }
 
 solo_sandbox_backend_t solo_sandbox_backend(int *version_out)
@@ -147,7 +242,6 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
     int fd;
     struct stat st;
     struct landlock_path_beneath_attr pb;
-    unsigned long access_rights = 0;
 
     if (path == NULL || path[0] == '\0') {
         return SOLO_SANDBOX_OK;
@@ -198,32 +292,8 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
         return SOLO_SANDBOX_ERROR;
     }
 
-    if (S_ISDIR(st.st_mode)) {
-        if (permissions & SOLO_SANDBOX_PERM_READ) {
-            access_rights |= (1UL << 0) | (1UL << 2) | (1UL << 3); /* EXEC | READ_FILE | READ_DIR */
-        }
-        if (permissions & SOLO_SANDBOX_PERM_WRITE) {
-            access_rights |= (1UL << 1) | (1UL << 4) | (1UL << 5) | (1UL << 7) | (1UL << 8);
-            if (abi >= 3)
-                access_rights |= (1UL << 14); /* TRUNCATE */
-        }
-    } else {
-        if (permissions & SOLO_SANDBOX_PERM_READ) {
-            access_rights |= (1UL << 0) | (1UL << 2); /* EXEC | READ_FILE */
-        }
-        if (permissions & SOLO_SANDBOX_PERM_WRITE) {
-            access_rights |= (1UL << 1); /* WRITE_FILE */
-            if (abi >= 3)
-                access_rights |= (1UL << 14); /* TRUNCATE */
-            if (abi >= 5)
-                access_rights |= (1UL << 15); /* IOCTL_DEV */
-        }
-    }
-
-    access_rights &= get_fs_mask(abi);
-
     memset(&pb, 0, sizeof(pb));
-    pb.allowed_access = access_rights;
+    pb.allowed_access = compute_access_rights(abi, permissions, S_ISDIR(st.st_mode));
     pb.parent_fd = fd;
 
     if (syscall(__NR_landlock_add_rule, s_ruleset_fd, LANDLOCK_RULE_PATH_BENEATH, &pb, 0) != 0) {
