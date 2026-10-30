@@ -230,3 +230,31 @@ target("test_lua")
     )
 
 end -- is_plat(host)
+
+-- ==============================================================================
+-- 4. Cross-Platform Smoke Binary
+-- ==============================================================================
+target("solo_smoke")
+    set_kind("binary")
+    set_rundir(os.projectdir())
+    add_files("tests/smoke.c")
+    add_deps("solo_static")
+    if is_plat("amiga") then
+        set_targetdir("build/amiga")
+        set_languages("gnu89")
+    elseif is_plat("atari") then
+        set_targetdir("build/atarist")
+        set_languages("gnu89")
+    elseif is_plat("dos") then
+        set_targetdir("build/dos")
+        add_rules("forge.watcom", {override = true})
+    elseif is_plat("os2") then
+        set_targetdir("build/os2")
+        add_rules("forge.watcom", {override = true})
+    elseif is_plat("kolibri") then
+        set_targetdir("build/kolibri")
+        add_cxflags("-nostdlib", "-U_WIN32", "-D__KOLIBRIOS__", {force = true})
+    else
+        set_targetdir("build/bin")
+        add_tests("smoke")
+    end

@@ -171,7 +171,11 @@ void solo_socket_close(solo_socket_t *sock)
 
 solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_socket_mode_t mode, char **err_msg)
 {
-    solo_socket_t *sock = solo_socket_tcp(mode, err_msg);
+    solo_socket_t *sock;
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+    sock = solo_socket_tcp(mode, err_msg);
     if (sock == NULL) {
         return NULL;
     }
@@ -186,7 +190,11 @@ solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_so
 
 solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
 {
-    solo_socket_t *sock = solo_socket_udp(mode, err_msg);
+    solo_socket_t *sock;
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+    sock = solo_socket_udp(mode, err_msg);
     if (sock == NULL) {
         return NULL;
     }
@@ -202,7 +210,11 @@ solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode
 solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
 {
     solo_socket_status_t st;
-    solo_socket_t *sock = solo_socket_tcp(mode, err_msg);
+    solo_socket_t *sock;
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+    sock = solo_socket_tcp(mode, err_msg);
     if (sock == NULL) {
         return NULL;
     }
@@ -308,6 +320,9 @@ int solo_socket_get_fd(const solo_socket_t *sock)
 
 solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
 {
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
     if (!SOLO_SOCK_IS_VALID(sock)) {
         solo_socket_set_err(err_msg, "invalid socket handle");
         return SOLO_SOCK_ERROR;
@@ -321,6 +336,9 @@ solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_
 
 solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
 {
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
     if (!SOLO_SOCK_IS_VALID(sock)) {
         solo_socket_set_err(err_msg, "invalid socket handle");
         return SOLO_SOCK_ERROR;

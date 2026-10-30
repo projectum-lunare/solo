@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <fcntl.h>
 #include <io.h>
 #include <bios.h>
@@ -26,6 +27,7 @@ struct serial_port {
     int fd;                 /* DOS file handle (or -1 if using pure hardware/BIOS) */
     unsigned int bios_port; /* 0 for COM1, 1 for COM2, 2 for COM3, 3 for COM4 */
     unsigned short base_io; /* 0x3F8, 0x2F8, 0x3E8, 0x2E8 */
+    int timeout_ms;         /* Read/write timeout */
     char name[8];           /* "COM1", "COM2", etc. */
 };
 
@@ -52,14 +54,19 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
                                  : 0x3F8;
     sprintf(dos_name, "COM%u", bios_port + 1);
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (opts == NULL) {
         default_opts.baud = 9600;
         default_opts.data_bits = 8;
         default_opts.parity = 'n';
         default_opts.stop_bits = 1;
-        default_opts.flow_control = 1; /* RTS/CTS */
+        default_opts.flow_control = 0; /* safe default: none */
         default_opts.rts = 1;
         default_opts.dtr = 1;
+        default_opts.timeout_ms = -1; /* default: blocking indefinitely */
         opts = &default_opts;
     }
 
@@ -146,6 +153,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     port->fd = fd;
     port->bios_port = bios_port;
     port->base_io = base_io;
+    port->timeout_ms = opts->timeout_ms;
     strncpy(port->name, dos_name, sizeof(port->name) - 1);
     port->name[sizeof(port->name) - 1] = '\0';
 
@@ -202,29 +210,120 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
     if (len == 0)
         return 0;
 
-    /* Primary: fast write via DOS handle */
-    if (port->fd >= 0) {
-        int n = write(port->fd, buf, len);
-        if (n >= 0)
-            return n;
-    }
-
-    /* Fallback: byte-by-byte write via UART THR with status polling */
-    {
+    /* Primary: direct UART THR with timeout deadline */
+    if (port->base_io != 0) {
         size_t i;
+        clock_t start = 0;
+        clock_t wait_ticks = 0;
+        int has_timeout = 0;
+
+        if (port->timeout_ms > 0) {
+            has_timeout = 1;
+            start = clock();
+            wait_ticks = (clock_t)(((long)port->timeout_ms * CLOCKS_PER_SEC) / 1000L);
+            if (wait_ticks == 0) wait_ticks = 1;
+        }
+
         for (i = 0; i < len; i++) {
-            int timeout = 50000;
-            /* Wait for Line Status Register (LSR) bit 5: Transmitter Holding Register Empty (THRE) */
-            while ((inp(port->base_io + 5) & 0x20) == 0 && --timeout > 0) {
-                /* spin wait */
-            }
-            if (timeout == 0) {
-                return (i > 0) ? (int)i : -1;
+            if (has_timeout) {
+                while ((inp(port->base_io + 5) & 0x20) == 0) {
+                    if ((clock() - start) >= wait_ticks) {
+                        return (int)i; /* 0 on timeout with 0 bytes, or partial count */
+                    }
+                }
+            } else if (port->timeout_ms == 0) {
+                /* Non-blocking: check if transmitter ready */
+                if ((inp(port->base_io + 5) & 0x20) == 0) {
+                    return (int)i;
+                }
+            } else {
+                /* Blocking indefinitely */
+                while ((inp(port->base_io + 5) & 0x20) == 0) {
+                    /* wait */
+                }
             }
             outp(port->base_io + 0, (unsigned char)buf[i]);
         }
         return (int)len;
     }
+
+    /* Fallback: write via DOS handle */
+    if (port->fd >= 0) {
+        int n = write(port->fd, buf, len);
+        return (n >= 0) ? n : -1;
+    }
+
+    return -1;
+}
+
+int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+{
+    int eff_timeout;
+    if (port == NULL || buf == NULL || max_len == 0)
+        return -1;
+
+    eff_timeout = (timeout_ms >= 0) ? timeout_ms : port->timeout_ms;
+
+    if (port->base_io != 0) {
+        if (eff_timeout > 0) {
+            clock_t start = clock();
+            clock_t wait_ticks = (clock_t)(((long)eff_timeout * CLOCKS_PER_SEC) / 1000L);
+            if (wait_ticks == 0) wait_ticks = 1;
+            while ((inp(port->base_io + 5) & 0x01) == 0) {
+                if ((clock() - start) >= wait_ticks) {
+                    return 0; /* Timeout */
+                }
+            }
+        } else if (eff_timeout == 0) {
+            if ((inp(port->base_io + 5) & 0x01) == 0) {
+                return 0; /* Would block */
+            }
+        } else {
+            while ((inp(port->base_io + 5) & 0x01) == 0) {
+                /* wait indefinitely */
+            }
+        }
+        buf[0] = (char)inp(port->base_io + 0);
+        return 1;
+    }
+
+    if (port->fd >= 0) {
+        int n = read(port->fd, buf, max_len);
+        return (n >= 0) ? n : -1;
+    }
+    return -1;
+}
+
+solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)
+{
+    if (port == NULL)
+        return SOLO_SERIAL_ERROR;
+    port->timeout_ms = timeout_ms;
+    return SOLO_SERIAL_OK;
+}
+
+int solo_serial_get_cts(solo_serial_t *port)
+{
+    if (port == NULL) return -1;
+    return (inp(port->base_io + 6) & 0x10) ? 1 : 0;
+}
+
+int solo_serial_get_dsr(solo_serial_t *port)
+{
+    if (port == NULL) return -1;
+    return (inp(port->base_io + 6) & 0x20) ? 1 : 0;
+}
+
+int solo_serial_get_ri(solo_serial_t *port)
+{
+    if (port == NULL) return -1;
+    return (inp(port->base_io + 6) & 0x40) ? 1 : 0;
+}
+
+int solo_serial_get_cd(solo_serial_t *port)
+{
+    if (port == NULL) return -1;
+    return (inp(port->base_io + 6) & 0x80) ? 1 : 0;
 }
 
 int solo_serial_drain(solo_serial_t *port)

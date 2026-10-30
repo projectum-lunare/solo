@@ -40,15 +40,25 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     int baud, bits, stop;
     const char *target = (path && path[0] != '\0') ? path : "/dev/eia0";
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (opts == NULL) {
         default_opts.baud = 9600;
         default_opts.data_bits = 8;
         default_opts.parity = 'n';
         default_opts.stop_bits = 1;
-        default_opts.flow_control = 1; /* hardware (RTS/CTS) */
+        default_opts.flow_control = 0; /* safe default: none */
         default_opts.rts = 1;
         default_opts.dtr = 1;
+        default_opts.timeout_ms = -1; /* default: blocking indefinitely */
         opts = &default_opts;
+    } else if (opts->timeout_ms >= 0) {
+        if (err_msg) {
+            *err_msg = safe_strdup("Timed/non-blocking serial I/O is unsupported on Plan 9");
+        }
+        return NULL;
     }
 
     snprintf(data_path, sizeof(data_path), "%s", target);
@@ -198,6 +208,54 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
     }
 
     return (int)total;
+}
+
+int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+{
+    if (port == NULL || port->data_fd < 0 || buf == NULL || max_len == 0) {
+        return -1;
+    }
+    if (timeout_ms >= 0) {
+        /* Plan 9 uart(3) does not support timed or non-blocking read */
+        return SOLO_SERIAL_UNSUPPORTED;
+    }
+    return (int)read(port->data_fd, buf, max_len);
+}
+
+solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)
+{
+    if (port == NULL || port->data_fd < 0) {
+        return SOLO_SERIAL_ERROR;
+    }
+    if (timeout_ms >= 0) {
+        /* Plan 9 uart(3) does not implement arbitrary millisecond or non-blocking timeouts */
+        return SOLO_SERIAL_UNSUPPORTED;
+    }
+    return SOLO_SERIAL_OK;
+}
+
+int solo_serial_get_cts(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_dsr(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_cd(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_ri(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
 }
 
 int solo_serial_drain(solo_serial_t *port)

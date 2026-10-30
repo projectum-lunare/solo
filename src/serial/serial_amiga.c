@@ -28,6 +28,7 @@ struct serial_port {
     struct MsgPort *mp;
     struct IOExtSer *io;
     int is_open;
+    int timeout_ms;
 };
 
 solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg)
@@ -41,15 +42,25 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     solo_serial_opts_t default_opts;
     BYTE open_err;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (opts == NULL) {
         default_opts.baud = 9600;
         default_opts.data_bits = 8;
         default_opts.parity = 'n';
         default_opts.stop_bits = 1;
-        default_opts.flow_control = 1; /* hardware (RTS/CTS) */
+        default_opts.flow_control = 0; /* safe default: none */
         default_opts.rts = 1;
         default_opts.dtr = 1;
+        default_opts.timeout_ms = -1; /* default: blocking indefinitely */
         opts = &default_opts;
+    } else if (opts->timeout_ms > 0) {
+        if (err_msg) {
+            *err_msg = safe_strdup("Arbitrary millisecond timeouts are unsupported on Amiga serial.device");
+        }
+        return NULL;
     }
 
     if (path == NULL || path[0] == '\0') {
@@ -155,6 +166,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     port->mp = mp;
     port->io = io;
     port->is_open = 1;
+    port->timeout_ms = (opts != NULL) ? opts->timeout_ms : -1;
 
     return port;
 }
@@ -164,16 +176,109 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
     if (port == NULL || port->io == NULL || buf == NULL || !port->is_open) {
         return -1;
     }
+    if (len == 0) {
+        return 0;
+    }
+    if (port->timeout_ms > 0) {
+        return SOLO_SERIAL_UNSUPPORTED;
+    }
 
     port->io->IOSer.io_Command = CMD_WRITE;
     port->io->IOSer.io_Data = (APTR)buf;
     port->io->IOSer.io_Length = (ULONG)len;
+
+    if (port->timeout_ms == 0) {
+        SendIO((struct IORequest *)port->io);
+        if (!CheckIO((struct IORequest *)port->io)) {
+            AbortIO((struct IORequest *)port->io);
+            WaitIO((struct IORequest *)port->io);
+            return 0; /* Timeout: 0 bytes written */
+        }
+        WaitIO((struct IORequest *)port->io);
+        if (port->io->IOSer.io_Error != 0) {
+            return -1;
+        }
+        return (int)len;
+    }
 
     if (DoIO((struct IORequest *)port->io) != 0) {
         return -1;
     }
 
     return (int)len;
+}
+
+int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+{
+    int effective_timeout;
+
+    if (port == NULL || port->io == NULL || buf == NULL || !port->is_open || max_len == 0) {
+        return -1;
+    }
+
+    effective_timeout = (timeout_ms < 0) ? port->timeout_ms : timeout_ms;
+    if (effective_timeout > 0) {
+        /* Amiga serial.device does not implement arbitrary millisecond timeouts without timer.device */
+        return SOLO_SERIAL_UNSUPPORTED;
+    }
+    if (effective_timeout == 0) {
+        /* Non-blocking check via SDCMD_QUERY */
+        port->io->IOSer.io_Command = SDCMD_QUERY;
+        if (DoIO((struct IORequest *)port->io) != 0) {
+            return -1;
+        }
+        if (port->io->IOSer.io_Actual == 0) {
+            return 0; /* No data ready */
+        }
+        if (max_len > port->io->IOSer.io_Actual) {
+            max_len = port->io->IOSer.io_Actual;
+        }
+    }
+
+    port->io->IOSer.io_Command = CMD_READ;
+    port->io->IOSer.io_Data = (APTR)buf;
+    port->io->IOSer.io_Length = (ULONG)max_len;
+    if (DoIO((struct IORequest *)port->io) != 0) {
+        return -1;
+    }
+    return (int)port->io->IOSer.io_Actual;
+}
+
+solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)
+{
+    if (port == NULL || !port->is_open) {
+        return SOLO_SERIAL_ERROR;
+    }
+    if (timeout_ms > 0) {
+        /* Amiga serial.device does not implement arbitrary millisecond timeouts without timer.device */
+        return SOLO_SERIAL_UNSUPPORTED;
+    }
+    port->timeout_ms = timeout_ms;
+    return SOLO_SERIAL_OK;
+}
+
+int solo_serial_get_cts(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_dsr(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_cd(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_ri(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
 }
 
 int solo_serial_drain(solo_serial_t *port)

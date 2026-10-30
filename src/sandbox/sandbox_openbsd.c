@@ -38,6 +38,10 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
     char mode[8];
     int idx = 0;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (path == NULL || path[0] == '\0') {
         return SOLO_SANDBOX_OK;
     }
@@ -57,7 +61,7 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
     if (unveil(path, mode) != 0) {
         if (err_msg != NULL) {
             char buf[256];
-            sprintf(buf, "unveil(%.128s, %s) failed: %s", path, mode, strerror(errno));
+            snprintf(buf, sizeof(buf), "unveil(%.128s, %s) failed: %s", path, mode, strerror(errno));
             *err_msg = safe_strdup(buf);
         }
         return SOLO_SANDBOX_ERROR;
@@ -67,10 +71,14 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
 
 solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
 {
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (unveil(NULL, NULL) != 0) {
         if (err_msg != NULL) {
-            char buf[128];
-            sprintf(buf, "unveil(NULL, NULL) failed: %s", strerror(errno));
+            char buf[256];
+            snprintf(buf, sizeof(buf), "unveil(NULL, NULL) failed: %s", strerror(errno));
             *err_msg = safe_strdup(buf);
         }
         return SOLO_SANDBOX_ERROR;
@@ -80,10 +88,14 @@ solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
 
 solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char **err_msg)
 {
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (pledge(promises, NULL) != 0) {
         if (err_msg != NULL) {
             char buf[256];
-            sprintf(buf, "pledge(%.128s) failed: %s", promises ? promises : "", strerror(errno));
+            snprintf(buf, sizeof(buf), "pledge(%.128s) failed: %s", promises ? promises : "", strerror(errno));
             *err_msg = safe_strdup(buf);
         }
         return SOLO_SANDBOX_ERROR;

@@ -34,6 +34,10 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     unsigned int bios_port = 0;
     int fd;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if ((dos_name[0] == 'L' || dos_name[0] == 'l') && (dos_name[1] == 'P' || dos_name[1] == 'p') &&
         (dos_name[2] == 'T' || dos_name[2] == 't') && dos_name[3] >= '1' && dos_name[3] <= '3') {
         bios_port = (unsigned int)(dos_name[3] - '1');
@@ -94,6 +98,36 @@ int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
     }
 }
 
+int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+{
+    (void)port;
+    (void)buf;
+    (void)max_len;
+    return -1;
+}
+
+solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)
+{
+    unsigned short st;
+    int pins = 0;
+    if (port == NULL || pins_out == NULL) return SOLO_PARALLEL_ERROR;
+    st = _bios_printer(_PRINTER_STATUS, (unsigned short)port->bios_port, 0);
+    if (!(st & 0x80)) pins |= SOLO_PARALLEL_PIN_BUSY;
+    if (st & 0x40)    pins |= SOLO_PARALLEL_PIN_ACK;
+    if (st & 0x20)    pins |= SOLO_PARALLEL_PIN_PE;
+    if (st & 0x10)    pins |= SOLO_PARALLEL_PIN_SLCT;
+    if (st & 0x08)    pins |= SOLO_PARALLEL_PIN_FAULT;
+    *pins_out = pins;
+    return SOLO_PARALLEL_OK;
+}
+
+solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parallel_mode_t mode)
+{
+    if (port == NULL) return SOLO_PARALLEL_ERROR;
+    if (mode == SOLO_PARALLEL_MODE_SPP) return SOLO_PARALLEL_OK;
+    return SOLO_PARALLEL_UNSUPPORTED;
+}
+
 int solo_parallel_drain(solo_parallel_t *port)
 {
     if (port == NULL)
@@ -114,8 +148,8 @@ int solo_parallel_drain(solo_parallel_t *port)
                 return 0;
             }
         }
+        return -1; /* Timeout: printer still busy */
     }
-    return 0;
 }
 
 void solo_parallel_close(solo_parallel_t *port)

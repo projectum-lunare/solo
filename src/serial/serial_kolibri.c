@@ -22,6 +22,7 @@
 struct serial_port {
     uint16_t base;    /* UART base I/O port address (e.g. 0x3F8) */
     int flow_control; /* 0: none, 1: hardware (RTS/CTS), 2: software (XON/XOFF) */
+    int timeout_ms;   /* Read/write timeout in milliseconds */
     uint8_t orig_ier; /* Original Interrupt Enable Register */
     uint8_t orig_lcr; /* Original Line Control Register */
     uint8_t orig_mcr; /* Original Modem Control Register */
@@ -138,14 +139,19 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     uint8_t mcr = 0;
     int baud;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (opts == NULL) {
         default_opts.baud = 9600;
         default_opts.data_bits = 8;
         default_opts.parity = 'n';
         default_opts.stop_bits = 1;
-        default_opts.flow_control = 1; /* hardware (RTS/CTS) */
+        default_opts.flow_control = 0; /* safe default: none */
         default_opts.rts = 1;
         default_opts.dtr = 1;
+        default_opts.timeout_ms = 0;
         opts = &default_opts;
     }
 
@@ -191,6 +197,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
 
     port->base = base;
     port->flow_control = opts->flow_control;
+    port->timeout_ms = opts->timeout_ms;
 
     /* Save original register configurations */
     port->orig_ier = inb(base + 1);
@@ -286,34 +293,48 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
 {
     size_t i;
     uint16_t base;
+    int elapsed = 0;
 
     if (port == NULL || port->base == 0 || buf == NULL)
         return -1;
+    if (len == 0)
+        return 0;
+
     base = port->base;
 
     for (i = 0; i < len; i++) {
         /*
          * Hardware Flow Control (RTS/CTS):
-         * Wait until CTS (Clear To Send, MSR bit 4 - 0x10) is asserted by printer.
+         * Wait until CTS (Clear To Send, MSR bit 4 - 0x10) is asserted.
          */
         if (port->flow_control == 1) {
-            uint32_t timeout_loops = 0;
             while ((inb(base + 6) & 0x10) == 0) {
-                kolibri_sleep(1);             /* Wait 10ms (1 centisecond) */
-                if (++timeout_loops > 3000) { /* 30-second timeout */
-                    return (i > 0) ? (int)i : -1;
+                if (port->timeout_ms > 0) {
+                    kolibri_sleep(1); /* 10ms */
+                    elapsed += 10;
+                    if (elapsed >= port->timeout_ms) {
+                        return (int)i;
+                    }
+                } else if (port->timeout_ms == 0) {
+                    return (int)i;
+                } else {
+                    kolibri_sleep(0);
                 }
             }
         }
 
         /* Wait for Transmitter Holding Register Empty (LSR bit 5 - 0x20) */
-        {
-            uint32_t spin = 0;
-            while ((inb(base + 5) & 0x20) == 0) {
-                if (++spin > 100000) {
-                    kolibri_sleep(0); /* Yield CPU timeslice */
-                    spin = 0;
+        while ((inb(base + 5) & 0x20) == 0) {
+            if (port->timeout_ms > 0) {
+                kolibri_sleep(1); /* 10ms */
+                elapsed += 10;
+                if (elapsed >= port->timeout_ms) {
+                    return (int)i;
                 }
+            } else if (port->timeout_ms == 0) {
+                return (int)i;
+            } else {
+                kolibri_sleep(0); /* Yield */
             }
         }
 
@@ -322,6 +343,69 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
     }
 
     return (int)len;
+}
+
+int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+{
+    int eff_timeout;
+    if (port == NULL || port->base == 0 || buf == NULL || max_len == 0)
+        return -1;
+
+    eff_timeout = (timeout_ms >= 0) ? timeout_ms : port->timeout_ms;
+
+    if (eff_timeout > 0) {
+        int elapsed = 0;
+        while ((inb(port->base + 5) & 0x01) == 0) {
+            kolibri_sleep(1); /* 10ms */
+            elapsed += 10;
+            if (elapsed >= eff_timeout) {
+                return 0; /* Timeout */
+            }
+        }
+    } else if (eff_timeout == 0) {
+        if ((inb(port->base + 5) & 0x01) == 0) {
+            return 0; /* Would block */
+        }
+    } else {
+        while ((inb(port->base + 5) & 0x01) == 0) {
+            kolibri_sleep(0); /* Yield */
+        }
+    }
+
+    buf[0] = (char)inb(port->base + 0);
+    return 1;
+}
+
+solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)
+{
+    if (port == NULL || port->base == 0)
+        return SOLO_SERIAL_ERROR;
+    port->timeout_ms = timeout_ms;
+    return SOLO_SERIAL_OK;
+}
+
+int solo_serial_get_cts(solo_serial_t *port)
+{
+    if (port == NULL || port->base == 0) return -1;
+    return (inb(port->base + 6) & 0x10) ? 1 : 0;
+}
+
+int solo_serial_get_dsr(solo_serial_t *port)
+{
+    if (port == NULL || port->base == 0) return -1;
+    return (inb(port->base + 6) & 0x20) ? 1 : 0;
+}
+
+int solo_serial_get_ri(solo_serial_t *port)
+{
+    if (port == NULL || port->base == 0) return -1;
+    return (inb(port->base + 6) & 0x40) ? 1 : 0;
+}
+
+int solo_serial_get_cd(solo_serial_t *port)
+{
+    if (port == NULL || port->base == 0) return -1;
+    return (inb(port->base + 6) & 0x80) ? 1 : 0;
 }
 
 int solo_serial_drain(solo_serial_t *port)

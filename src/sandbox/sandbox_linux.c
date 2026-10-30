@@ -243,6 +243,10 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
     struct stat st;
     struct landlock_path_beneath_attr pb;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (path == NULL || path[0] == '\0') {
         return SOLO_SANDBOX_OK;
     }
@@ -263,8 +267,8 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
         s_ruleset_fd = (int)syscall(__NR_landlock_create_ruleset, &attr, sizeof(attr), 0);
         if (s_ruleset_fd < 0) {
             if (err_msg != NULL) {
-                char buf[128];
-                sprintf(buf, "landlock_create_ruleset failed (%s)", strerror(errno));
+                char buf[256];
+                snprintf(buf, sizeof(buf), "landlock_create_ruleset failed (%s)", strerror(errno));
                 *err_msg = safe_strdup(buf);
             }
             return SOLO_SANDBOX_ERROR;
@@ -278,7 +282,7 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
     if (fd < 0) {
         if (err_msg != NULL) {
             char buf[256];
-            sprintf(buf, "Cannot open path '%.128s' for sandbox: %s", path, strerror(errno));
+            snprintf(buf, sizeof(buf), "Cannot open path '%.128s' for sandbox: %s", path, strerror(errno));
             *err_msg = safe_strdup(buf);
         }
         return SOLO_SANDBOX_ERROR;
@@ -300,7 +304,7 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
         close(fd);
         if (err_msg != NULL) {
             char buf[256];
-            sprintf(buf, "landlock_add_rule failed on '%.128s': %s", path, strerror(errno));
+            snprintf(buf, sizeof(buf), "landlock_add_rule failed on '%.128s': %s", path, strerror(errno));
             *err_msg = safe_strdup(buf);
         }
         return SOLO_SANDBOX_ERROR;
@@ -320,6 +324,10 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
 
 solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
 {
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
 #if defined(__NR_landlock_restrict_self)
     if (s_ruleset_fd >= 0) {
         if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
@@ -330,8 +338,8 @@ solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
         }
         if (syscall(__NR_landlock_restrict_self, s_ruleset_fd, 0) != 0) {
             if (err_msg != NULL) {
-                char buf[128];
-                sprintf(buf, "landlock_restrict_self failed (%s)", strerror(errno));
+                char buf[256];
+                snprintf(buf, sizeof(buf), "landlock_restrict_self failed (%s)", strerror(errno));
                 *err_msg = safe_strdup(buf);
             }
             close(s_ruleset_fd);
@@ -341,14 +349,55 @@ solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
         close(s_ruleset_fd);
         s_ruleset_fd = -1;
         return SOLO_SANDBOX_OK;
-    }
-    if (probe_landlock_abi() <= 0) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Landlock is not supported by the running Linux kernel");
+    } else {
+        /*
+         * When lock is called without prior unveil(), create an empty ruleset
+         * and enforce it so that all handled filesystem access is locked down.
+         */
+        int abi = probe_landlock_abi();
+        int empty_fd;
+        struct landlock_ruleset_attr attr;
+
+        if (abi <= 0) {
+            if (err_msg != NULL) {
+                *err_msg = safe_strdup("Landlock is not supported by the running Linux kernel");
+            }
+            return SOLO_SANDBOX_UNSUPPORTED;
         }
-        return SOLO_SANDBOX_UNSUPPORTED;
+
+        memset(&attr, 0, sizeof(attr));
+        attr.handled_access_fs = get_fs_mask(abi);
+        empty_fd = (int)syscall(__NR_landlock_create_ruleset, &attr, sizeof(attr), 0);
+        if (empty_fd < 0) {
+            if (err_msg != NULL) {
+                char buf[256];
+                snprintf(buf, sizeof(buf), "landlock_create_ruleset failed (%s)", strerror(errno));
+                *err_msg = safe_strdup(buf);
+            }
+            return SOLO_SANDBOX_ERROR;
+        }
+
+        if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
+            if (err_msg != NULL) {
+                *err_msg = safe_strdup("prctl(PR_SET_NO_NEW_PRIVS) failed");
+            }
+            close(empty_fd);
+            return SOLO_SANDBOX_ERROR;
+        }
+
+        if (syscall(__NR_landlock_restrict_self, empty_fd, 0) != 0) {
+            if (err_msg != NULL) {
+                char buf[256];
+                snprintf(buf, sizeof(buf), "landlock_restrict_self failed (%s)", strerror(errno));
+                *err_msg = safe_strdup(buf);
+            }
+            close(empty_fd);
+            return SOLO_SANDBOX_ERROR;
+        }
+
+        close(empty_fd);
+        return SOLO_SANDBOX_OK;
     }
-    return SOLO_SANDBOX_OK;
 #else
     if (err_msg != NULL) {
         *err_msg = safe_strdup("Landlock is not supported in this build");

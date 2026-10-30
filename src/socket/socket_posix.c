@@ -48,9 +48,14 @@
 solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char **err_msg)
 {
     int socktype = (type == SOLO_SOCK_UDP) ? SOCK_DGRAM : SOCK_STREAM;
-    int fd = socket(AF_INET, socktype, 0);
+    int fd;
     solo_socket_t *sock;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
+    fd = socket(AF_INET, socktype, 0);
     if (fd < 0) {
         if (err_msg != NULL) {
             *err_msg = safe_strdup(strerror(errno));
@@ -97,6 +102,10 @@ solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host
     int status;
     int opt = 1;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (sock == NULL || sock->fd < 0) {
         if (err_msg != NULL) {
             *err_msg = safe_strdup("invalid socket handle");
@@ -104,7 +113,7 @@ solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host
         return SOLO_SOCK_ERROR;
     }
 
-    sprintf(port_str, "%d", port);
+    snprintf(port_str, sizeof(port_str), "%d", port);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -154,6 +163,10 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
     int status;
     int connected = 0;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (sock == NULL || sock->fd < 0) {
         if (err_msg != NULL) {
             *err_msg = safe_strdup("invalid socket handle");
@@ -163,7 +176,7 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
 
     host = solo_socket_normalize_connect_host(host);
 
-    sprintf(port_str, "%d", port);
+    snprintf(port_str, sizeof(port_str), "%d", port);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -207,6 +220,10 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     socklen_t addr_len = sizeof(addr);
     int client_fd;
     solo_socket_t *client_sock;
+
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
 
     if (server == NULL || server->fd < 0) {
         if (err_msg != NULL) {
@@ -448,6 +465,11 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
 solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
 {
     int flags;
+
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (sock == NULL || sock->fd < 0) {
         if (err_msg != NULL) {
             *err_msg = safe_strdup("invalid socket handle");
@@ -482,6 +504,11 @@ solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_sock
 solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
 {
     struct timeval tv;
+
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (sock == NULL || sock->fd < 0) {
         if (err_msg != NULL) {
             *err_msg = safe_strdup("invalid socket handle");

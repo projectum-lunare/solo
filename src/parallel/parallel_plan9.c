@@ -32,6 +32,10 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     int fd;
     solo_parallel_t *port;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     fd = open(target_path, O_WRONLY);
     if (fd < 0 && strncmp(target_path, "/dev/lpt", 8) == 0) {
         /* Fallback to device space #p/lpt if #p is not bound to /dev */
@@ -86,6 +90,28 @@ int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
     }
 
     return (int)total;
+}
+
+int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+{
+    (void)port;
+    (void)buf;
+    (void)max_len;
+    return -1;
+}
+
+solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)
+{
+    (void)port;
+    if (pins_out != NULL) *pins_out = 0;
+    return SOLO_PARALLEL_UNSUPPORTED;
+}
+
+solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parallel_mode_t mode)
+{
+    if (port == NULL || port->fd < 0) return SOLO_PARALLEL_ERROR;
+    if (mode == SOLO_PARALLEL_MODE_SPP) return SOLO_PARALLEL_OK;
+    return SOLO_PARALLEL_UNSUPPORTED;
 }
 
 int solo_parallel_drain(solo_parallel_t *port)

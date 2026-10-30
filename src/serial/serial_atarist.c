@@ -15,12 +15,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <osbind.h>
 
 #include <solo/serial.h>
 
 struct serial_port {
     short dev_id; /* BIOS device 1 = AUX: (RS-232 / Modem) */
+    int timeout_ms;
     char name[16];
 };
 
@@ -103,6 +105,10 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     solo_serial_t *port;
     (void)path;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     port = (solo_serial_t *)malloc(sizeof(solo_serial_t));
     if (port == NULL) {
         if (err_msg != NULL) {
@@ -112,6 +118,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     }
 
     port->dev_id = 1; /* BIOS Device 1: RS-232 Serial (AUX:) */
+    port->timeout_ms = (opts != NULL) ? opts->timeout_ms : -1;
     strncpy(port->name, (path && path[0] != '\0') ? path : "AUX:", sizeof(port->name) - 1);
     port->name[sizeof(port->name) - 1] = '\0';
 
@@ -146,6 +153,9 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
 int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
 {
     size_t i;
+    clock_t start = 0;
+    clock_t wait_ticks = 0;
+    int has_timeout = 0;
 
     if (port == NULL || buf == NULL) {
         return -1;
@@ -154,12 +164,27 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
         return 0;
     }
 
+    if (port->timeout_ms > 0) {
+        has_timeout = 1;
+        start = clock();
+        wait_ticks = (clock_t)(((long)port->timeout_ms * CLOCKS_PER_SEC) / 1000L);
+        if (wait_ticks == 0) wait_ticks = 1;
+    }
+
     for (i = 0; i < len; i++) {
-        /* Poll Bcostat(1) until MFP 68901 UART transmitter is ready */
-        long timeout = 2000000L;
-        while (Bcostat(port->dev_id) == 0) {
-            if (--timeout <= 0) {
-                return (i > 0) ? (int)i : -1;
+        if (has_timeout) {
+            while (Bcostat(port->dev_id) == 0) {
+                if ((clock() - start) >= wait_ticks) {
+                    return (int)i; /* 0 on timeout with 0 bytes, or partial count */
+                }
+            }
+        } else if (port->timeout_ms == 0) {
+            if (Bcostat(port->dev_id) == 0) {
+                return (int)i;
+            }
+        } else {
+            while (Bcostat(port->dev_id) == 0) {
+                /* wait indefinitely */
             }
         }
 
@@ -167,6 +192,71 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
     }
 
     return (int)len;
+}
+
+int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+{
+    int eff_timeout;
+    if (port == NULL || buf == NULL || max_len == 0) {
+        return -1;
+    }
+
+    eff_timeout = (timeout_ms >= 0) ? timeout_ms : port->timeout_ms;
+
+    if (eff_timeout > 0) {
+        clock_t start = clock();
+        clock_t wait_ticks = (clock_t)(((long)eff_timeout * CLOCKS_PER_SEC) / 1000L);
+        if (wait_ticks == 0) wait_ticks = 1;
+        while (Bconstat(port->dev_id) == 0) {
+            if ((clock() - start) >= wait_ticks) {
+                return 0; /* Timeout */
+            }
+        }
+    } else if (eff_timeout == 0) {
+        if (Bconstat(port->dev_id) == 0) {
+            return 0; /* Would block */
+        }
+    } else {
+        while (Bconstat(port->dev_id) == 0) {
+            /* wait indefinitely */
+        }
+    }
+
+    buf[0] = (char)Bconin(port->dev_id);
+    return 1;
+}
+
+solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)
+{
+    if (port == NULL) {
+        return SOLO_SERIAL_ERROR;
+    }
+    port->timeout_ms = timeout_ms;
+    return SOLO_SERIAL_OK;
+}
+
+int solo_serial_get_cts(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_dsr(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_cd(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_ri(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
 }
 
 int solo_serial_drain(solo_serial_t *port)

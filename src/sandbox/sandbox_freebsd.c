@@ -46,66 +46,20 @@ const char *solo_sandbox_backend_name(int *version_out)
 
 solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
 {
-    /*
-     * Under FreeBSD Capsicum, capability mode restricts path-based lookups after cap_enter().
-     * In this unveil callback, we verify that the target path exists and is accessible
-     * with the requested permissions before entering capability mode.
-     */
-    int mode = F_OK;
-
-    if (path == NULL || path[0] == '\0') {
-        return SOLO_SANDBOX_OK;
+    (void)path;
+    (void)permissions;
+    if (err_msg != NULL) {
+        *err_msg = safe_strdup("unveil is not supported on FreeBSD (Capsicum operates on capability descriptors, not paths)");
     }
-
-    if (permissions & SOLO_SANDBOX_PERM_READ) {
-        mode |= R_OK;
-    }
-    if (permissions & SOLO_SANDBOX_PERM_WRITE) {
-        mode |= W_OK;
-    }
-    if (permissions & SOLO_SANDBOX_PERM_EXEC) {
-        mode |= X_OK;
-    }
-
-    if (access(path, mode) != 0) {
-        /* If write was requested on a non-existing file, check parent directory */
-        if ((permissions & SOLO_SANDBOX_PERM_WRITE) && errno == ENOENT) {
-            char dir_buf[1024];
-            char *slash;
-            size_t len = strlen(path);
-            if (len >= sizeof(dir_buf))
-                len = sizeof(dir_buf) - 1;
-            memcpy(dir_buf, path, len);
-            dir_buf[len] = '\0';
-            slash = strrchr(dir_buf, '/');
-            if (slash != NULL) {
-                if (slash == dir_buf) {
-                    *(slash + 1) = '\0';
-                } else {
-                    *slash = '\0';
-                }
-                if (access(dir_buf, W_OK) == 0) {
-                    return SOLO_SANDBOX_OK;
-                }
-            } else {
-                if (access(".", W_OK) == 0) {
-                    return SOLO_SANDBOX_OK;
-                }
-            }
-        }
-        if (err_msg != NULL) {
-            char buf[256];
-            sprintf(buf, "access(%.128s) check failed: %s", path, strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
-        return SOLO_SANDBOX_ERROR;
-    }
-
-    return SOLO_SANDBOX_OK;
+    return SOLO_SANDBOX_UNSUPPORTED;
 }
 
 solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
 {
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (cap_enter() != 0) {
         if (errno == ENOSYS) {
             if (err_msg != NULL) {
@@ -114,8 +68,8 @@ solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
             return SOLO_SANDBOX_UNSUPPORTED;
         }
         if (err_msg != NULL) {
-            char buf[128];
-            sprintf(buf, "cap_enter() failed (%s)", strerror(errno));
+            char buf[256];
+            snprintf(buf, sizeof(buf), "cap_enter() failed (%s)", strerror(errno));
             *err_msg = safe_strdup(buf);
         }
         return SOLO_SANDBOX_ERROR;

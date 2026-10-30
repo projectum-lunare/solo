@@ -31,6 +31,46 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     return NULL;
 }
 
+int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+{
+    (void)port;
+    (void)buf;
+    (void)max_len;
+    (void)timeout_ms;
+    return -1;
+}
+
+solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)
+{
+    (void)port;
+    (void)timeout_ms;
+    return SOLO_SERIAL_UNSUPPORTED;
+}
+
+int solo_serial_get_cts(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_dsr(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_cd(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
+int solo_serial_get_ri(solo_serial_t *port)
+{
+    (void)port;
+    return -1;
+}
+
 solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state)
 {
     (void)port;

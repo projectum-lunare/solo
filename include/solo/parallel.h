@@ -61,12 +61,33 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg);
 
 /*
  * Writes data to the parallel port. Returns the number of bytes written,
- * or -1 on error.
+ * or -1 on error. If partial bytes are accepted before error, returns the
+ * positive count of bytes transferred.
  */
 int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len);
 
 /*
- * Waits for the printer to empty its hardware buffer (hardware drain).
+ * Reads reverse data from the parallel port (IEEE 1284 Nibble/Byte/EPP/ECP modes).
+ * Returns the number of bytes read, or -1 on error or if unsupported.
+ */
+int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len);
+
+/*
+ * Queries current Centronics status pins (BUSY, ACK, PE, SLCT, FAULT).
+ * Returns SOLO_PARALLEL_OK and populates *pins_out with solo_parallel_pin_t bitmask,
+ * or SOLO_PARALLEL_UNSUPPORTED / SOLO_PARALLEL_ERROR on failure.
+ */
+solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out);
+
+/*
+ * Configures the operational mode (SPP, NIBBLE, BYTE, EPP, ECP).
+ * Returns SOLO_PARALLEL_OK, or SOLO_PARALLEL_UNSUPPORTED if the mode
+ * is not supported by the hardware or driver.
+ */
+solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parallel_mode_t mode);
+
+/*
+ * Waits for the printer to empty its hardware buffer and deassert BUSY (hardware drain).
  */
 int solo_parallel_drain(solo_parallel_t *port);
 

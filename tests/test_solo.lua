@@ -71,6 +71,14 @@ describe("solo.filesystem (Filesystem Abstraction & fs Alias)", function()
         assert_false(solo.fs.exists("nonexistent_path_xyz_123.bin"))
     end)
 
+    test("filesystem exists returns false for empty strings and handles directory paths", function()
+        assert_false(solo.fs.exists(""))
+        assert_true(solo.fs.exists("src"))
+        assert_true(solo.fs.exists("include"))
+        assert_true(solo.fs.exists("tests"))
+        assert_false(solo.fs.exists("deeply/nested/nonexistent/path/file.txt"))
+    end)
+
     test("submodules require('solo.fs') and require('solo.filesystem') resolve correctly", function()
         local req_fs = require("solo.fs")
         assert_eq(req_fs, solo.fs)
@@ -96,9 +104,10 @@ describe("solo.sandbox (Kernel Security & Isolation)", function()
         assert_eq(type(s.pledge), "function")
     end)
 
-    test("unveil and pledge invocations return boolean status", function()
-        assert_eq(type(s.unveil(".", "r")), "boolean")
-        assert_eq(type(s.pledge("stdio rpath")), "boolean")
+    test("unveil on nonexistent path fails visibly without altering sandbox state", function()
+        local ok, err, code = s.unveil("/nonexistent_sandbox_path_12345", "r")
+        assert_false(ok)
+        assert_true(err ~= nil)
     end)
 
     test("defines sandbox backend, perm and status enum tables", function()
@@ -124,9 +133,44 @@ describe("solo.sandbox (Kernel Security & Isolation)", function()
         assert_eq(s.EXEC, 4)
     end)
 
-    test("unveil accepts both string and integer enum permissions", function()
-        assert_eq(type(s.unveil(".", "r")), "boolean")
-        assert_eq(type(s.unveil(".", s.perm.READ)), "boolean")
+    test("enforces filesystem isolation in child process after unveil and lock", function()
+        local backend, ver = s.backend()
+        if backend == "landlock" and ver and ver > 0 then
+            local lua_bin = os.getenv("LUA_BIN") or "/usr/bin/lua5.5"
+            local code = [=[
+                local s = require("solo.sandbox")
+                assert(s.unveil(".", "r"))
+                assert(s.lock())
+                local f1 = io.open("xmake.lua", "r")
+                if not f1 then os.exit(1) end
+                f1:close()
+                local f2 = io.open("/etc/passwd", "r")
+                if f2 then f2:close() os.exit(2) end
+                os.exit(0)
+            ]=]
+            local cmd = string.format('LUA_CPATH="./build/lua/?.so;./?.so;;" %s -e %q 2>/dev/null', lua_bin, code)
+            local res = os.execute(cmd)
+            local status = (res == 0 or res == true)
+            assert_true(status)
+        end
+    end)
+
+    test("lock without unveil in child process restricts entire filesystem", function()
+        local backend, ver = s.backend()
+        if backend == "landlock" and ver and ver > 0 then
+            local lua_bin = os.getenv("LUA_BIN") or "/usr/bin/lua5.5"
+            local code = [=[
+                local s = require("solo.sandbox")
+                assert(s.lock())
+                local f = io.open("/etc/passwd", "r")
+                if f then f:close() os.exit(2) end
+                os.exit(0)
+            ]=]
+            local cmd = string.format('LUA_CPATH="./build/lua/?.so;./?.so;;" %s -e %q 2>/dev/null', lua_bin, code)
+            local res = os.execute(cmd)
+            local status = (res == 0 or res == true)
+            assert_true(status)
+        end
     end)
 
     test("unsupported sandbox operations fail visibly with explanatory error", function()
@@ -259,6 +303,41 @@ describe("solo.parallel & solo.serial (Physical Device Driver Signatures)", func
 
     test("parallel open accepts options table or string path", function()
         local port, err = solo.parallel.open({ path = "/nonexistent_lpt_device_12345" })
+        assert_nil(port)
+        assert_eq(type(err), "string")
+    end)
+
+    test("serial open accepts timeout option and defaults flow to none", function()
+        local port, err = solo.serial.open("/nonexistent_tty_device_flow_none", {
+            baud = 9600,
+            flow = "none",
+            timeout = 500
+        })
+        assert_nil(port)
+        assert_eq(type(err), "string")
+    end)
+
+    test("serial open accepts positional arguments with timeout", function()
+        local port, err = solo.serial.open("/nonexistent_tty_device_pos_timeout", 9600, 8, "n", 1, "none", true, true, 500)
+        assert_nil(port)
+        assert_eq(type(err), "string")
+    end)
+
+    test("serial open rejects invalid baud and parity without crashing", function()
+        local p1, err1 = solo.serial.open("/nonexistent_dev_bad_baud", { baud = 12345 })
+        assert_nil(p1)
+        assert_eq(type(err1), "string")
+
+        local p2, err2 = solo.serial.open("/nonexistent_dev_bad_parity", { parity = "invalid_parity" })
+        assert_nil(p2)
+        assert_eq(type(err2), "string")
+    end)
+
+    test("parallel open accepts mode option", function()
+        local port, err = solo.parallel.open({
+            path = "/nonexistent_lpt_mode",
+            mode = solo.parallel.mode.BYTE
+        })
         assert_nil(port)
         assert_eq(type(err), "string")
     end)
@@ -497,6 +576,86 @@ describe("solo.socket (Network Sockets & Multiplexing)", function()
         to_client:close()
         to_acc:close()
         to_server:close()
+    end)
+
+    test("handles multiple concurrent TCP client connections", function()
+        local s_port = 19960
+        local server = sock.bind("127.0.0.1", s_port, 10)
+        if not server then
+            s_port = 19961
+            server = sock.bind("127.0.0.1", s_port, 10)
+        end
+        assert_true(server ~= nil)
+
+        local c1 = sock.connect("127.0.0.1", s_port)
+        local a1 = server:accept()
+        local c2 = sock.connect("127.0.0.1", s_port)
+        local a2 = server:accept()
+
+        c1:send("client1_msg")
+        c2:send("client2_msg")
+
+        local m1 = a1:recv(64)
+        local m2 = a2:recv(64)
+
+        assert_eq(m1, "client1_msg")
+        assert_eq(m2, "client2_msg")
+
+        c1:close()
+        c2:close()
+        a1:close()
+        a2:close()
+        server:close()
+    end)
+
+    test("transfers large streaming payloads (64KB) over TCP loopback", function()
+        local s_port = 19965
+        local server = sock.bind("127.0.0.1", s_port, 5)
+        if not server then
+            s_port = 19966
+            server = sock.bind("127.0.0.1", s_port, 5)
+        end
+        local client = sock.connect("127.0.0.1", s_port)
+        local acc = server:accept()
+
+        local payload = string.rep("0123456789ABCDEF", 4096) -- 64 KB
+        client:send(payload)
+
+        local received = {}
+        local total = 0
+        while total < #payload do
+            local chunk = acc:recv(math.min(4096, #payload - total))
+            if chunk and #chunk > 0 then
+                table.insert(received, chunk)
+                total = total + #chunk
+            end
+        end
+        local full = table.concat(received)
+        assert_eq(#full, #payload)
+        assert_eq(full, payload)
+
+        client:close()
+        acc:close()
+        server:close()
+    end)
+
+    test("guards against operations on closed sockets", function()
+        local s = sock.udp()
+        s:close()
+        local ok, err = pcall(function() s:sendto("data", "127.0.0.1", 1234) end)
+        assert_false(ok)
+        assert_true(err ~= nil and err:match("closed") ~= nil)
+    end)
+
+    test("safely garbage collects sockets without memory faults", function()
+        for i = 1, 50 do
+            local s = sock.udp()
+            if i % 2 == 0 then
+                s:close()
+            end
+        end
+        collectgarbage("collect")
+        collectgarbage("collect")
     end)
 end)
 

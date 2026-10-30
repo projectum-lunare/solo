@@ -40,6 +40,10 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     solo_parallel_t *port = NULL;
     BYTE open_err;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     if (path == NULL || path[0] == '\0') {
         strncpy(dev_name, "parallel.device", sizeof(dev_name) - 1);
         dev_name[sizeof(dev_name) - 1] = '\0';
@@ -120,6 +124,28 @@ int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
     }
 
     return (int)len;
+}
+
+int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+{
+    (void)port;
+    (void)buf;
+    (void)max_len;
+    return -1;
+}
+
+solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)
+{
+    (void)port;
+    if (pins_out != NULL) *pins_out = 0;
+    return SOLO_PARALLEL_UNSUPPORTED;
+}
+
+solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parallel_mode_t mode)
+{
+    if (port == NULL || !port->is_open) return SOLO_PARALLEL_ERROR;
+    if (mode == SOLO_PARALLEL_MODE_SPP) return SOLO_PARALLEL_OK;
+    return SOLO_PARALLEL_UNSUPPORTED;
 }
 
 int solo_parallel_drain(solo_parallel_t *port)

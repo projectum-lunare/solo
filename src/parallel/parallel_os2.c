@@ -37,6 +37,10 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     APIRET rc;
     solo_parallel_t *port;
 
+    if (err_msg != NULL) {
+        *err_msg = NULL;
+    }
+
     /*
      * DosOpen with:
      * - OPEN_ACTION_OPEN_IF_EXISTS | OPEN_ACTION_FAIL_IF_NEW: open device if it exists
@@ -90,6 +94,28 @@ int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
     }
 
     return (int)written;
+}
+
+int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+{
+    (void)port;
+    (void)buf;
+    (void)max_len;
+    return -1;
+}
+
+solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)
+{
+    (void)port;
+    if (pins_out != NULL) *pins_out = 0;
+    return SOLO_PARALLEL_UNSUPPORTED;
+}
+
+solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parallel_mode_t mode)
+{
+    if (port == NULL || port->handle == NULLHANDLE) return SOLO_PARALLEL_ERROR;
+    if (mode == SOLO_PARALLEL_MODE_SPP) return SOLO_PARALLEL_OK;
+    return SOLO_PARALLEL_UNSUPPORTED;
 }
 
 int solo_parallel_drain(solo_parallel_t *port)

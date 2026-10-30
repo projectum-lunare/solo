@@ -67,6 +67,13 @@ const char *solo_sandbox_backend_name(int *version_out);
 
 /*
  * Unveils a filesystem path with given permissions (read/write/exec).
+ *
+ * NOTE: Sandboxing operations are process-global.
+ * Under Linux (Landlock), calls to unveil() accumulate path rules into a
+ * process-wide ruleset until solo_sandbox_lock() is called to enforce them.
+ * Under FreeBSD (Capsicum), path-based unveil is not supported and returns
+ * SOLO_SANDBOX_UNSUPPORTED.
+ *
  * Returns SOLO_SANDBOX_OK on success,
  * SOLO_SANDBOX_UNSUPPORTED if sandboxing is not supported on this platform,
  * or SOLO_SANDBOX_ERROR on failure (with *err_msg dynamically allocated
@@ -76,7 +83,8 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
 
 /*
  * Locks the sandbox, enforcing the restrictions on the current process.
- * After locking, no further paths can be unveiled.
+ * If called without prior unveil(), enforces an empty ruleset that prevents
+ * opening any newly restricted filesystem paths.
  * Returns SOLO_SANDBOX_OK on success,
  * SOLO_SANDBOX_UNSUPPORTED if sandboxing is not supported on this platform,
  * or SOLO_SANDBOX_ERROR on failure (with *err_msg dynamically allocated

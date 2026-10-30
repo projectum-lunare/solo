@@ -98,12 +98,14 @@ typedef struct {
     int flow_control; /* solo_serial_flow_t (0: none, 1: hardware RTS/CTS, 2: software XON/XOFF) */
     int rts;          /* solo_serial_line_t (-1: ignore, 0: off/clear, 1: on/set) */
     int dtr;          /* solo_serial_line_t (-1: ignore, 0: off/clear, 1: on/set) */
+    int timeout_ms;   /* Read/write timeout: 0 = non-blocking, >0 = timeout in ms, <0 = blocking indefinitely */
 } solo_serial_opts_t;
 
 /*
- * Opens a serial port for communication with impact printers.
- * Supports hardware flow control (RTS/CTS) and software flow control (XON/XOFF),
- * as well as initial modem line configuration for RTS and DTR.
+ * Opens a serial port for communication.
+ * Default flow control is SOLO_SERIAL_FLOW_NONE (0).
+ * Default timeout is -1 (blocking indefinitely).
+ * Hardware flow control (RTS/CTS) is only activated when explicitly requested.
  * On failure, returns NULL and populates *err_msg with a dynamically
  * allocated string (if err_msg != NULL). The caller owns the string and
  * must release it with free().
@@ -111,10 +113,33 @@ typedef struct {
 solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg);
 
 /*
- * Writes data to the serial port. Returns the number of bytes written,
- * or -1 on error.
+ * Writes data to the serial port.
+ * Returns:
+ *   > 0 : number of bytes written (full or partial).
+ *     0 : timeout expired before any bytes could be accepted (or len == 0).
+ *    -1 : I/O error.
  */
 int solo_serial_write(solo_serial_t *port, const char *buf, size_t len);
+
+/*
+ * Reads data from the serial port.
+ * Returns:
+ *   > 0 : number of bytes read.
+ *     0 : timeout expired before any bytes became available (or would block).
+ *    -1 : I/O error.
+ *    -2 : SOLO_SERIAL_UNSUPPORTED (if timed read is not supported on this platform).
+ *
+ * If timeout_ms < 0, uses the port's configured timeout (from opts or solo_serial_set_timeout).
+ * If the effective timeout is < 0, blocks indefinitely until at least one byte is available.
+ * If the effective timeout is 0, performs a non-blocking check.
+ * If the effective timeout is > 0, waits up to timeout_ms milliseconds.
+ */
+int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms);
+
+/*
+ * Configures the default I/O timeout in milliseconds for the serial port.
+ */
+solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms);
 
 /*
  * Waits for the UART transmit buffer to drain completely (hardware drain).
@@ -128,6 +153,16 @@ int solo_serial_drain(solo_serial_t *port);
  */
 solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state);
 solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t state);
+
+/*
+ * Queries the modem input lines (CTS, DSR, CD/DCD, RI).
+ * Returns 1 if asserted/high, 0 if deasserted/low,
+ * or -1 on error or if unsupported.
+ */
+int solo_serial_get_cts(solo_serial_t *port);
+int solo_serial_get_dsr(solo_serial_t *port);
+int solo_serial_get_cd(solo_serial_t *port);
+int solo_serial_get_ri(solo_serial_t *port);
 
 /*
  * Closes the serial port and frees allocated resources.

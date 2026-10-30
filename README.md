@@ -7,7 +7,7 @@
 [![Language: ANSI C89](https://img.shields.io/badge/C-ANSI_C89-brightgreen.svg)]()
 [![Lua: 5.4-5.5](https://img.shields.io/badge/Lua-5.4_--_5.5-blue.svg)]()
 
-`solo` is a portable, zero-bloat system foundation library written in strict ANSI C (C89 / ISO C90) with first-class Lua bindings. It bridges hardware I/O, network communication, physical ports, persistent filesystems, and kernel-level sandboxing across **10 distinct operating system families** — from vintage platforms of the 1990s (DOS, Amiga, Windows CE, Atari ST) to modern POSIX workstations in 2026.
+`solo` is a portable, zero-bloat system foundation library with public C headers and core logic designed for strict ANSI C (C89 / ISO C90) and first-class Lua bindings. Low-level vintage device drivers compile under `gnu89` where platform SDKs require GCC extensions (`__asm__`, struct alignment, register calling conventions). It bridges hardware I/O, network communication, physical ports, persistent filesystems, and kernel-level sandboxing across **10 distinct operating system families** — from vintage platforms of the 1990s (DOS, Amiga, Windows CE, Atari ST) to modern POSIX workstations in 2026.
 
 ---
 
@@ -21,9 +21,9 @@ The library is structured as a cohesive monorepo divided into specialized subsys
 ├────────────────────────────────────────────────────────────────────────┤
 │ • solo.platform   │ Compiler, OS & CPU detection, bits & endianness    │
 │ • solo.filesystem │ Safe file and directory I/O (alias: solo.fs)       │
-│ • solo.parallel   │ Centronics parallel port (IEEE 1284 / LPT)         │
+│ • solo.parallel   │ Centronics parallel port (LPT / SPP)               │
 │ • solo.serial     │ RS-232 serial UART with hardware flow control      │
-│ • solo.socket     │ Raw TCP & UDP stream/datagram sockets              │
+│ • solo.socket     │ Raw TCP & UDP stream/datagram sockets (IPv4)       │
 │ • solo.sandbox    │ Kernel sandboxing (Landlock, Pledge, Capsicum)     │
 └────────────────────────────────────────────────────────────────────────┘
 ```
@@ -39,21 +39,24 @@ The library is structured as a cohesive monorepo divided into specialized subsys
 - Clean separation between storage syscalls and environment metadata.
 - Ergonomic alias: accessible interchangeably as `solo.filesystem` or `solo.fs` (both in the module table and via `require("solo.fs")`).
 
-### 3. `parallel` — Centronics Parallel Port
+### 3. `parallel` — Centronics Parallel Port (LPT / SPP)
 
 - Direct hardware strobe, busy status check, and buffer drain for impact printers, matrix devices, and parallel links with typed enums (`solo.parallel.mode`, `solo.parallel.pin`, `solo.parallel.port`, `solo.parallel.status`).
+- Hardware status monitoring: queries real-time printer status pins (`BUSY`, `ACK`, `PE`, `SLCT`, `FAULT`). `solo_parallel_drain` actively polls the BUSY line until printing completes, returning an error on timeout.
+- Standard line printer devices (`/dev/lp*`, `LPT1`) operate in Centronics SPP mode; bidirectional IEEE 1284 modes return `SOLO_PARALLEL_UNSUPPORTED` on unidirectional printer ports.
 - Backends: POSIX `/dev/lp0`, Windows NT `LPT1`, Windows CE, DOS `INT 17h` and direct I/O port strobe, Amiga `parallel.device`, Atari ST, KolibriOS, OS/2, Plan 9.
 
 ### 4. `serial` — RS-232 Serial UART
 
-- Industrial-grade serial communication with typed enums (`solo.serial.flow`, `solo.serial.parity`, `solo.serial.stop_bits`, `solo.serial.data_bits`, `solo.serial.baud`, `solo.serial.line`, `solo.serial.status`): configurable baud rates, data bits, parity, stop bits, and full flow control (hardware RTS/CTS and software XON/XOFF).
-- Direct modem line manipulation (`RTS`, `DTR`).
+- Industrial-grade serial communication with typed enums (`solo.serial.flow`, `solo.serial.parity`, `solo.serial.stop_bits`, `solo.serial.data_bits`, `solo.serial.baud`, `solo.serial.line`, `solo.serial.status`): configurable baud rates, data bits, parity, stop bits, and flow control.
+- Safe default: flow control defaults to `NONE` (0). Hardware RTS/CTS is opt-in, preventing write hangs on 3-wire cables or USB adapters without CTS connected.
+- Full bidirectional UART: `write()`, `read()`, timeout control (`set_timeout()`), and modem control/status lines (`set_rts`, `set_dtr`, `get_cts`, `get_dsr`, `get_cd`, `get_ri`).
 - Flexible initialization supporting both ergonomic options tables and classic positional parameters.
 - Backends: POSIX termios, Windows NT Comm API, Windows CE, DOS BIOS `INT 14h` / 8250 UART, Amiga `serial.device`, Atari ST, KolibriOS, OS/2, Plan 9.
 
-### 5. `socket` — Raw Network Sockets
+### 5. `socket` — Raw Network Sockets (IPv4)
 
-- Unified TCP & UDP socket abstraction with typed Enums (`solo.socket.type`, `solo.socket.mode`, `solo.socket.event`, `solo.socket.status`).
+- Unified IPv4 TCP & UDP socket abstraction with typed Enums (`solo.socket.type`, `solo.socket.mode`, `solo.socket.event`, `solo.socket.status`).
 - Synchronous and asynchronous operation modes (`sock:set_mode`, `sock:set_blocking`, `sock:set_timeout`).
 - TCP client connections (`solo.socket.connect`), server binding (`solo.socket.bind`), and client acceptance (`sock:accept`).
 - UDP datagram sockets (`solo.socket.udp`, `solo.socket.udp_bind`), datagram transmission (`sock:sendto`), and reception with sender addressing (`sock:recvfrom`).
@@ -63,10 +66,10 @@ The library is structured as a cohesive monorepo divided into specialized subsys
 ### 6. `sandbox` — Kernel-Level Sandboxing
 
 - Enforces the principle of least privilege directly inside operating system kernels:
-  - **Linux:** Modern Landlock LSM filesystem restriction and `prctl(PR_SET_NO_NEW_PRIVS)`.
+  - **Linux:** Modern Landlock LSM filesystem restriction and `prctl(PR_SET_NO_NEW_PRIVS)`. The Landlock ruleset is process-wide; `solo.sandbox.lock()` locks the ruleset for the process and its descendants. Calling lock without prior unveil restricts the entire filesystem.
   - **OpenBSD:** Unveil filesystem paths (`unveil`) and syscall restrictions (`pledge`).
   - **FreeBSD:** Capsicum capability mode.
-  - **Other platforms:** Safe fallback stub with zero runtime overhead.
+  - **Other platforms:** Safe fallback stub returning `SOLO_SANDBOX_UNSUPPORTED` with zero runtime overhead.
 
 ---
 
@@ -132,7 +135,7 @@ if port then
     port:close()
 end
 
--- 6. Parallel Port (parallel / Centronics IEEE 1284)
+-- 6. Parallel Port (parallel / Centronics SPP)
 local lpt, err = solo.parallel.open(solo.parallel.port.LPT1)
 if lpt then
     lpt:write("Print payload via Centronics!\n\f")
@@ -179,7 +182,9 @@ int main(void) {
 
 ## 📦 Building and Testing
 
-`solo` requires only a standard ANSI C89 compiler (`gcc`, `clang`, `watcom`, `tcc`, `vbcc`, or `sasc`). The build defaults to `-std=c89` with zero warnings.
+`solo` public C headers (`include/solo/*.h`) and core common logic are strictly ANSI C89 (C90) compliant, ensuring universal interoperability across vintage and modern C compilers. Target-specific low-level drivers that interface directly with hardware registers or OS SDKs (such as AmigaOS m68k, Atari ST TOS/MiNT, and KolibriOS) compile under `gnu89` with GCC extensions (`__asm__`, struct alignment, `#pragma`).
+
+The project uses [xmake](https://xmake.io) and [Forge](https://github.com/projectum-lunare/forge) as its unified build system.
 
 ```bash
 # Build static library, shared library, and Lua module:
@@ -191,23 +196,26 @@ xmake test
 # Run Lua test suite via Forge launcher:
 xmake run test_lua
 
+# Run minimal standalone smoke executable:
+xmake run solo_smoke
+
 # Clean artifacts:
 xmake clean
 ```
 
-### Modular Builds & Feature Flags
+### Modular Targets & Submodules
 
-`solo` is fully decoupled. If an application only needs specific subsystems, unneeded modules can be excluded at compile-time to reduce binary size and eliminate external library dependencies:
+`solo` builds both an umbrella library (`libsolo.a` / `solo.so`) and independent, zero-dependency submodules that can be required in Lua without overhead:
 
 ```bash
-# Compile only specific modules (e.g. platform detection and serial UART):
-make MODULES="platform serial"
-
-# Build standalone Lua C submodules (build/lua/solo/*.so):
-make modules
+# Build only a specific submodule or target:
+xmake build solo_static
+xmake build solo.serial
+xmake build solo_smoke
 ```
 
 #### C Preprocessor Flags
+If embedding `solo` directly in a custom build system or firmware, unneeded subsystems can be excluded via compile-time defines:
 - `-DSOLO_NO_SOCKET`: Exclude networking and TCP/UDP sockets.
 - `-DSOLO_NO_SERIAL`: Exclude serial port abstractions.
 - `-DSOLO_NO_PARALLEL`: Exclude parallel port abstractions.

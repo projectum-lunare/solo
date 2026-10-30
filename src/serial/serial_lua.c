@@ -34,15 +34,157 @@ static int lsolo_serial_write(lua_State *L)
     if (p->handle == NULL) {
         return luaL_error(L, "attempt to write to closed serial port");
     }
+    if (len == 0) {
+        lua_pushinteger(L, 0);
+        return 1;
+    }
 
     res = solo_serial_write(p->handle, data, len);
     if (res < 0) {
         lua_pushnil(L);
-        lua_pushstring(L, "I/O error during serial write");
+        if (res == SOLO_SERIAL_UNSUPPORTED) {
+            lua_pushliteral(L, "operation unsupported on this platform");
+            lua_pushinteger(L, SOLO_SERIAL_UNSUPPORTED);
+            return 3;
+        }
+        lua_pushliteral(L, "I/O error during serial write");
+        return 2;
+    }
+    if (res == 0) {
+        lua_pushnil(L);
+        lua_pushliteral(L, "timeout");
         return 2;
     }
 
     lua_pushinteger(L, res);
+    return 1;
+}
+
+static int lsolo_serial_read(lua_State *L)
+{
+    lsolo_serial_t *p = (lsolo_serial_t *)luaL_checkudata(L, 1, SERIAL_PORT_MT);
+    lua_Integer max_bytes = luaL_optinteger(L, 2, 4096);
+    int timeout_ms = (int)luaL_optinteger(L, 3, -1);
+    char *buf;
+    int n;
+
+    if (p->handle == NULL) {
+        return luaL_error(L, "attempt to read from closed serial port");
+    }
+    if (max_bytes <= 0) {
+        lua_pushliteral(L, "");
+        return 1;
+    }
+
+    buf = (char *)malloc((size_t)max_bytes);
+    if (buf == NULL) {
+        return luaL_error(L, "out of memory allocating serial read buffer");
+    }
+
+    n = solo_serial_read(p->handle, buf, (size_t)max_bytes, timeout_ms);
+    if (n < 0) {
+        free(buf);
+        lua_pushnil(L);
+        if (n == SOLO_SERIAL_UNSUPPORTED) {
+            lua_pushliteral(L, "operation unsupported on this platform");
+            lua_pushinteger(L, SOLO_SERIAL_UNSUPPORTED);
+            return 3;
+        }
+        lua_pushliteral(L, "I/O error during serial read");
+        return 2;
+    }
+    if (n == 0) {
+        free(buf);
+        lua_pushnil(L);
+        lua_pushliteral(L, "timeout");
+        return 2;
+    }
+
+    lua_pushlstring(L, buf, (size_t)n);
+    free(buf);
+    return 1;
+}
+
+static int lsolo_serial_set_timeout(lua_State *L)
+{
+    lsolo_serial_t *p = (lsolo_serial_t *)luaL_checkudata(L, 1, SERIAL_PORT_MT);
+    int timeout_ms = (int)luaL_checkinteger(L, 2);
+    solo_serial_status_t st;
+    if (p->handle == NULL) {
+        return luaL_error(L, "attempt to configure closed serial port");
+    }
+    st = solo_serial_set_timeout(p->handle, timeout_ms);
+    if (st != SOLO_SERIAL_OK) {
+        lua_pushboolean(L, 0);
+        if (st == SOLO_SERIAL_UNSUPPORTED) {
+            lua_pushliteral(L, "operation unsupported on this platform");
+            lua_pushinteger(L, SOLO_SERIAL_UNSUPPORTED);
+            return 3;
+        }
+        lua_pushliteral(L, "failed to set serial timeout");
+        return 2;
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static int lsolo_serial_get_cts(lua_State *L)
+{
+    lsolo_serial_t *p = (lsolo_serial_t *)luaL_checkudata(L, 1, SERIAL_PORT_MT);
+    int val;
+    if (p->handle == NULL) return luaL_error(L, "attempt to use closed serial port");
+    val = solo_serial_get_cts(p->handle);
+    if (val < 0) {
+        lua_pushnil(L);
+        lua_pushliteral(L, "unsupported or failed to read CTS");
+        return 2;
+    }
+    lua_pushboolean(L, val > 0);
+    return 1;
+}
+
+static int lsolo_serial_get_dsr(lua_State *L)
+{
+    lsolo_serial_t *p = (lsolo_serial_t *)luaL_checkudata(L, 1, SERIAL_PORT_MT);
+    int val;
+    if (p->handle == NULL) return luaL_error(L, "attempt to use closed serial port");
+    val = solo_serial_get_dsr(p->handle);
+    if (val < 0) {
+        lua_pushnil(L);
+        lua_pushliteral(L, "unsupported or failed to read DSR");
+        return 2;
+    }
+    lua_pushboolean(L, val > 0);
+    return 1;
+}
+
+static int lsolo_serial_get_cd(lua_State *L)
+{
+    lsolo_serial_t *p = (lsolo_serial_t *)luaL_checkudata(L, 1, SERIAL_PORT_MT);
+    int val;
+    if (p->handle == NULL) return luaL_error(L, "attempt to use closed serial port");
+    val = solo_serial_get_cd(p->handle);
+    if (val < 0) {
+        lua_pushnil(L);
+        lua_pushliteral(L, "unsupported or failed to read CD");
+        return 2;
+    }
+    lua_pushboolean(L, val > 0);
+    return 1;
+}
+
+static int lsolo_serial_get_ri(lua_State *L)
+{
+    lsolo_serial_t *p = (lsolo_serial_t *)luaL_checkudata(L, 1, SERIAL_PORT_MT);
+    int val;
+    if (p->handle == NULL) return luaL_error(L, "attempt to use closed serial port");
+    val = solo_serial_get_ri(p->handle);
+    if (val < 0) {
+        lua_pushnil(L);
+        lua_pushliteral(L, "unsupported or failed to read RI");
+        return 2;
+    }
+    lua_pushboolean(L, val > 0);
     return 1;
 }
 
@@ -221,9 +363,10 @@ static int lsolo_serial_open(lua_State *L)
     opts.data_bits = 8;
     opts.parity = 'n';
     opts.stop_bits = 1;
-    opts.flow_control = SOLO_SERIAL_FLOW_HARDWARE;
+    opts.flow_control = SOLO_SERIAL_FLOW_NONE;
     opts.rts = 1;
     opts.dtr = 1;
+    opts.timeout_ms = -1;
 
     if (lua_istable(L, 2)) {
         lua_getfield(L, 2, "baud");
@@ -264,7 +407,7 @@ static int lsolo_serial_open(lua_State *L)
             lua_getfield(L, 2, "flow_control");
         }
         if (!lua_isnil(L, -1)) {
-            opts.flow_control = parse_flow_value(L, -1, SOLO_SERIAL_FLOW_HARDWARE);
+            opts.flow_control = parse_flow_value(L, -1, SOLO_SERIAL_FLOW_NONE);
         }
         lua_pop(L, 1);
 
@@ -287,14 +430,25 @@ static int lsolo_serial_open(lua_State *L)
             }
         }
         lua_pop(L, 1);
+
+        lua_getfield(L, 2, "timeout");
+        if (lua_isnil(L, -1)) {
+            lua_pop(L, 1);
+            lua_getfield(L, 2, "timeout_ms");
+        }
+        if (!lua_isnil(L, -1)) {
+            opts.timeout_ms = (int)luaL_checkinteger(L, -1);
+        }
+        lua_pop(L, 1);
     } else {
         opts.baud = (int)luaL_optinteger(L, 2, 9600);
         opts.data_bits = (int)luaL_optinteger(L, 3, 8);
         opts.parity = parse_parity_value(L, 4, 'n');
         opts.stop_bits = (int)luaL_optinteger(L, 5, 1);
-        opts.flow_control = parse_flow_value(L, 6, SOLO_SERIAL_FLOW_HARDWARE);
+        opts.flow_control = parse_flow_value(L, 6, SOLO_SERIAL_FLOW_NONE);
         opts.rts = lua_isnoneornil(L, 7) ? 1 : (lua_toboolean(L, 7) ? 1 : 0);
         opts.dtr = lua_isnoneornil(L, 8) ? 1 : (lua_toboolean(L, 8) ? 1 : 0);
+        opts.timeout_ms = (int)luaL_optinteger(L, 9, -1);
     }
 
     sp = solo_serial_open(path, &opts, &err_msg);
@@ -319,15 +473,21 @@ static int lsolo_serial_open(lua_State *L)
 }
 
 static const luaL_Reg port_methods[] = {
-    {"write",   lsolo_serial_write  },
-    {"drain",   lsolo_serial_drain  },
-    {"flush",   lsolo_serial_drain  },
-    {"set_rts", lsolo_serial_set_rts},
-    {"set_dtr", lsolo_serial_set_dtr},
-    {"close",   lsolo_serial_close  },
-    {"__close", lsolo_serial_close  },
-    {"__gc",    lsolo_serial_close  },
-    {NULL,      NULL           }
+    {"write",       lsolo_serial_write      },
+    {"read",        lsolo_serial_read       },
+    {"set_timeout", lsolo_serial_set_timeout},
+    {"drain",       lsolo_serial_drain      },
+    {"flush",       lsolo_serial_drain      },
+    {"set_rts",     lsolo_serial_set_rts    },
+    {"set_dtr",     lsolo_serial_set_dtr    },
+    {"get_cts",     lsolo_serial_get_cts    },
+    {"get_dsr",     lsolo_serial_get_dsr    },
+    {"get_cd",      lsolo_serial_get_cd     },
+    {"get_ri",      lsolo_serial_get_ri     },
+    {"close",       lsolo_serial_close      },
+    {"__close",     lsolo_serial_close      },
+    {"__gc",        lsolo_serial_close      },
+    {NULL,          NULL                    }
 };
 
 static const luaL_Reg serial_funcs[] = {

@@ -58,13 +58,19 @@ typedef enum solo_socket_event {
 } solo_socket_event_t;
 
 /*
+ * Scope & Protocol Foundation:
+ * The solo.socket subsystem is explicitly designed as a portable IPv4 (32-bit)
+ * networking engine, ensuring 100% API and semantic parity between modern
+ * operating systems and vintage platforms (DOS WATT-32, OS/2, Amiga AmiTCP).
+ *
  * Error Reporting & Dynamic Memory Ownership:
- * All socket functions accepting a `char **err_msg` argument will dynamically
- * allocate a null-terminated string describing the failure when an error occurs
- * and `err_msg` is non-NULL.
+ * All socket functions accepting a `char **err_msg` argument will set `*err_msg = NULL`
+ * upon entry if `err_msg` is non-NULL.
+ * When an error occurs and `err_msg` is non-NULL, a null-terminated string describing
+ * the failure is dynamically allocated.
  * The CALLER assumes ownership of this string and is responsible for freeing it
  * using free().
- * If no error occurs, `*err_msg` is not allocated (set to NULL or unchanged).
+ * On successful execution, `*err_msg` remains NULL.
  */
 
 /*

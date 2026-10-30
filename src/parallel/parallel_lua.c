@@ -63,6 +63,83 @@ static int lsolo_parallel_drain(lua_State *L)
     return 1;
 }
 
+static int lsolo_parallel_read(lua_State *L)
+{
+    lsolo_parallel_t *p = (lsolo_parallel_t *)luaL_checkudata(L, 1, PARALLEL_PORT_MT);
+    lua_Integer max_bytes = luaL_optinteger(L, 2, 4096);
+    char *buf;
+    int n;
+
+    if (p->handle == NULL) {
+        return luaL_error(L, "attempt to read from closed parallel port");
+    }
+    if (max_bytes <= 0) {
+        lua_pushliteral(L, "");
+        return 1;
+    }
+
+    buf = (char *)malloc((size_t)max_bytes);
+    if (buf == NULL) {
+        return luaL_error(L, "out of memory allocating parallel read buffer");
+    }
+
+    n = solo_parallel_read(p->handle, buf, (size_t)max_bytes);
+    if (n < 0) {
+        free(buf);
+        lua_pushnil(L);
+        lua_pushliteral(L, "I/O error or unsupported read on parallel port");
+        return 2;
+    }
+
+    lua_pushlstring(L, buf, (size_t)n);
+    free(buf);
+    return 1;
+}
+
+static int lsolo_parallel_status(lua_State *L)
+{
+    lsolo_parallel_t *p = (lsolo_parallel_t *)luaL_checkudata(L, 1, PARALLEL_PORT_MT);
+    int pins = 0;
+    solo_parallel_status_t st;
+
+    if (p->handle == NULL) {
+        return luaL_error(L, "attempt to query status of closed parallel port");
+    }
+
+    st = solo_parallel_get_status(p->handle, &pins);
+    if (st != SOLO_PARALLEL_OK) {
+        lua_pushnil(L);
+        lua_pushliteral(L, "hardware status query unsupported or failed");
+        lua_pushinteger(L, st);
+        return 3;
+    }
+
+    lua_pushinteger(L, pins);
+    return 1;
+}
+
+static int lsolo_parallel_set_mode(lua_State *L)
+{
+    lsolo_parallel_t *p = (lsolo_parallel_t *)luaL_checkudata(L, 1, PARALLEL_PORT_MT);
+    int mode = (int)luaL_checkinteger(L, 2);
+    solo_parallel_status_t st;
+
+    if (p->handle == NULL) {
+        return luaL_error(L, "attempt to set mode on closed parallel port");
+    }
+
+    st = solo_parallel_set_mode(p->handle, (solo_parallel_mode_t)mode);
+    if (st != SOLO_PARALLEL_OK) {
+        lua_pushboolean(L, 0);
+        lua_pushliteral(L, "mode selection unsupported on this device");
+        lua_pushinteger(L, st);
+        return 3;
+    }
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 static int lsolo_parallel_close(lua_State *L)
 {
     lsolo_parallel_t *p = (lsolo_parallel_t *)luaL_checkudata(L, 1, PARALLEL_PORT_MT);
@@ -116,13 +193,16 @@ static int lsolo_parallel_open(lua_State *L)
 }
 
 static const luaL_Reg port_methods[] = {
-    {"write",   lsolo_parallel_write},
-    {"drain",   lsolo_parallel_drain},
-    {"flush",   lsolo_parallel_drain},
-    {"close",   lsolo_parallel_close},
-    {"__close", lsolo_parallel_close},
-    {"__gc",    lsolo_parallel_close},
-    {NULL,      NULL           }
+    {"write",    lsolo_parallel_write   },
+    {"read",     lsolo_parallel_read    },
+    {"status",   lsolo_parallel_status  },
+    {"set_mode", lsolo_parallel_set_mode},
+    {"drain",    lsolo_parallel_drain   },
+    {"flush",    lsolo_parallel_drain   },
+    {"close",    lsolo_parallel_close   },
+    {"__close",  lsolo_parallel_close   },
+    {"__gc",     lsolo_parallel_close   },
+    {NULL,       NULL                   }
 };
 
 static const luaL_Reg parallel_funcs[] = {

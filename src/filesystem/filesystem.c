@@ -102,19 +102,22 @@ int solo_fs_exists(const char *path)
 
 #include <errno.h>
 #include <stdio.h>
+#include <sys/stat.h>
 
+/*
+ * Generic ISO C fallback:
+ * Uses stat() to check for node existence without opening device nodes or FIFOs.
+ */
 int solo_fs_exists(const char *path)
 {
-    FILE *f;
+    struct stat st;
     if (path == NULL) {
         return 0;
     }
-    f = fopen(path, "r");
-    if (f != NULL) {
-        fclose(f);
+    if (stat(path, &st) == 0) {
         return 1;
     }
-    return (errno != ENOENT);
+    return (errno != ENOENT && errno != ENOTDIR);
 }
 
 #endif
