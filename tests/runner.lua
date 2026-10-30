@@ -13,8 +13,15 @@ local harness = require("tests.harness")
 
 io.write("==> Running Solo Lua Test Suite...\n")
 
+-- Modular Lua test suites under tests/lua/
 local suites = {
-    "tests.test_solo",
+    "tests.lua.test_platform",
+    "tests.lua.test_filesystem",
+    "tests.lua.test_sandbox",
+    "tests.lua.test_serial",
+    "tests.lua.test_parallel",
+    "tests.lua.test_socket",
+    "tests.lua.test_submodules",
 }
 
 local filter = arg and arg[1]
