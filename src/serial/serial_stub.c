@@ -21,23 +21,24 @@ struct serial_port {
     int dummy;
 };
 
-solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg)
+solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char *err_buf, size_t err_cap)
 {
     (void)path;
     (void)opts;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("Serial ports are not supported on this platform");
-    }
+    solo_set_err(err_buf, err_cap, "Serial ports are not supported on this platform");
     return NULL;
 }
 
-int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+solo_status_t solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, size_t *read_bytes, int timeout_ms)
 {
     (void)port;
     (void)buf;
     (void)max_len;
     (void)timeout_ms;
-    return -1;
+    if (read_bytes != NULL) {
+        *read_bytes = 0;
+    }
+    return SOLO_UNSUPPORTED;
 }
 
 solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)
@@ -85,12 +86,15 @@ solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t
     return SOLO_SERIAL_UNSUPPORTED;
 }
 
-int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
+solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     (void)port;
     (void)buf;
     (void)len;
-    return -1;
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+    return SOLO_UNSUPPORTED;
 }
 
 int solo_serial_drain(solo_serial_t *port)

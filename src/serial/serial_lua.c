@@ -29,7 +29,8 @@ static int lsolo_serial_write(lua_State *L)
     lsolo_serial_t *p = (lsolo_serial_t *)luaL_checkudata(L, 1, SERIAL_PORT_MT);
     size_t len;
     const char *data = luaL_checklstring(L, 2, &len);
-    int res;
+    size_t written = 0;
+    solo_status_t st;
 
     if (p->handle == NULL) {
         return luaL_error(L, "attempt to write to closed serial port");
@@ -39,24 +40,25 @@ static int lsolo_serial_write(lua_State *L)
         return 1;
     }
 
-    res = solo_serial_write(p->handle, data, len);
-    if (res < 0) {
-        lua_pushnil(L);
-        if (res == SOLO_SERIAL_UNSUPPORTED) {
-            lua_pushliteral(L, "operation unsupported on this platform");
-            lua_pushinteger(L, SOLO_SERIAL_UNSUPPORTED);
-            return 3;
-        }
-        lua_pushliteral(L, "I/O error during serial write");
-        return 2;
-    }
-    if (res == 0) {
+    st = solo_serial_write(p->handle, data, len, &written);
+    if (st == SOLO_AGAIN) {
         lua_pushnil(L);
         lua_pushliteral(L, "timeout");
         return 2;
     }
+    if (st == SOLO_UNSUPPORTED) {
+        lua_pushnil(L);
+        lua_pushliteral(L, "operation unsupported on this platform");
+        lua_pushinteger(L, SOLO_SERIAL_UNSUPPORTED);
+        return 3;
+    }
+    if (st != SOLO_OK) {
+        lua_pushnil(L);
+        lua_pushliteral(L, "I/O error during serial write");
+        return 2;
+    }
 
-    lua_pushinteger(L, res);
+    lua_pushinteger(L, (lua_Integer)written);
     return 1;
 }
 
@@ -66,7 +68,8 @@ static int lsolo_serial_read(lua_State *L)
     lua_Integer max_bytes = luaL_optinteger(L, 2, 4096);
     int timeout_ms = (int)luaL_optinteger(L, 3, -1);
     char *buf;
-    int n;
+    size_t read_bytes = 0;
+    solo_status_t st;
 
     if (p->handle == NULL) {
         return luaL_error(L, "attempt to read from closed serial port");
@@ -81,26 +84,28 @@ static int lsolo_serial_read(lua_State *L)
         return luaL_error(L, "out of memory allocating serial read buffer");
     }
 
-    n = solo_serial_read(p->handle, buf, (size_t)max_bytes, timeout_ms);
-    if (n < 0) {
-        free(buf);
-        lua_pushnil(L);
-        if (n == SOLO_SERIAL_UNSUPPORTED) {
-            lua_pushliteral(L, "operation unsupported on this platform");
-            lua_pushinteger(L, SOLO_SERIAL_UNSUPPORTED);
-            return 3;
-        }
-        lua_pushliteral(L, "I/O error during serial read");
-        return 2;
-    }
-    if (n == 0) {
+    st = solo_serial_read(p->handle, buf, (size_t)max_bytes, &read_bytes, timeout_ms);
+    if (st == SOLO_AGAIN) {
         free(buf);
         lua_pushnil(L);
         lua_pushliteral(L, "timeout");
         return 2;
     }
+    if (st == SOLO_UNSUPPORTED) {
+        free(buf);
+        lua_pushnil(L);
+        lua_pushliteral(L, "operation unsupported on this platform");
+        lua_pushinteger(L, SOLO_SERIAL_UNSUPPORTED);
+        return 3;
+    }
+    if (st != SOLO_OK) {
+        free(buf);
+        lua_pushnil(L);
+        lua_pushliteral(L, "I/O error during serial read");
+        return 2;
+    }
 
-    lua_pushlstring(L, buf, (size_t)n);
+    lua_pushlstring(L, buf, read_bytes);
     free(buf);
     return 1;
 }
@@ -355,9 +360,11 @@ static int lsolo_serial_open(lua_State *L)
 {
     const char *path = luaL_checkstring(L, 1);
     solo_serial_opts_t opts;
-    char *err_msg = NULL;
+    char err_buf[256];
     solo_serial_t *sp;
     lsolo_serial_t *p;
+
+    err_buf[0] = '\0';
 
     opts.baud = 9600;
     opts.data_bits = 8;
@@ -451,12 +458,11 @@ static int lsolo_serial_open(lua_State *L)
         opts.timeout_ms = (int)luaL_optinteger(L, 9, -1);
     }
 
-    sp = solo_serial_open(path, &opts, &err_msg);
+    sp = solo_serial_open(path, &opts, err_buf, sizeof(err_buf));
     if (sp == NULL) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to open serial device");
         }

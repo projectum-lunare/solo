@@ -27,15 +27,15 @@ struct parallel_port {
     char name[8];           /* "LPT1", "LPT2", "LPT3", or "PRN" */
 };
 
-solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
+solo_parallel_t *solo_parallel_open(const char *path, char *err_buf, size_t err_cap)
 {
     solo_parallel_t *port;
     const char *dos_name = (path && path[0] != '\0') ? path : "LPT1";
     unsigned int bios_port = 0;
     int fd;
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if ((dos_name[0] == 'L' || dos_name[0] == 'l') && (dos_name[1] == 'P' || dos_name[1] == 'p') &&
@@ -53,8 +53,7 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     if (port == NULL) {
         if (fd >= 0)
             close(fd);
-        if (err_msg != NULL)
-            *err_msg = safe_strdup("Memory allocation failure for DOS parallel port");
+        solo_set_err(err_buf, err_cap, "Memory allocation failure for DOS parallel port");
         return NULL;
     }
 
@@ -69,18 +68,24 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     return port;
 }
 
-int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
+solo_status_t solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+
     if (port == NULL || buf == NULL)
-        return -1;
+        return SOLO_ERROR;
     if (len == 0)
-        return 0;
+        return SOLO_OK;
 
     /* Primary: fast block write via DOS handle */
     if (port->fd >= 0) {
         int n = write(port->fd, buf, len);
-        if (n >= 0)
-            return n;
+        if (n >= 0) {
+            if (written_bytes != NULL) *written_bytes = (size_t)n;
+            return SOLO_OK;
+        }
     }
 
     /* Fallback: byte-by-byte write via BIOS INT 17h */
@@ -91,19 +96,22 @@ int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
                 _bios_printer(_PRINTER_WRITE, port->bios_port, (unsigned char)buf[i]);
             /* Check error bits: timeout (0x01) or I/O error (0x08) */
             if ((status & 0x09) != 0) {
-                return (i > 0) ? (int)i : -1;
+                if (written_bytes != NULL) *written_bytes = i;
+                return (i > 0) ? SOLO_OK : SOLO_ERROR;
             }
         }
-        return (int)len;
+        if (written_bytes != NULL) *written_bytes = len;
+        return SOLO_OK;
     }
 }
 
-int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+solo_status_t solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len, size_t *read_bytes)
 {
     (void)port;
     (void)buf;
     (void)max_len;
-    return -1;
+    if (read_bytes != NULL) *read_bytes = 0;
+    return SOLO_UNSUPPORTED;
 }
 
 solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)

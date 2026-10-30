@@ -75,18 +75,18 @@ int solo_socket_normalize_timeout(int timeout_ms);
 void solo_socket_ms_to_timeval(int timeout_ms, long *sec, long *usec);
 
 /* =============================================================================
- * Shared Error Reporting Helpers
+ * Shared Error Reporting Helpers (Safe C89 Caller Buffers)
  * ============================================================================= */
-void solo_socket_set_err(char **err_msg, const char *msg);
-void solo_socket_set_err_fmt(char **err_msg, const char *fmt, ...);
+#define solo_socket_set_err     solo_set_err
+#define solo_socket_set_err_fmt solo_set_err_fmt
 
 /* =============================================================================
  * Driver SPI (Service Provider Interface) for OS Backends
  * ============================================================================= */
 void solo_socket_backend_close(solo_socket_t *sock);
 solo_socket_status_t solo_socket_backend_send(solo_socket_t *sock, const char *buf, size_t len, size_t *sent);
-solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg);
-solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg);
+solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char *err_buf, size_t err_cap);
+solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char *err_buf, size_t err_cap);
 int solo_socket_backend_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms);
 
 #ifdef __cplusplus

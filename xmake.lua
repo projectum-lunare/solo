@@ -47,7 +47,7 @@ target("solo_static")
         add_files(
             "src/parallel/parallel_amiga.c",
             "src/serial/serial_amiga.c",
-            "src/socket/socket_amiga.c",
+            "src/socket/socket_bsd.c",
             "src/sandbox/sandbox_stub.c"
         )
     elseif is_plat("atari") then
@@ -56,7 +56,7 @@ target("solo_static")
         add_files(
             "src/parallel/parallel_atarist.c",
             "src/serial/serial_atarist.c",
-            "src/socket/socket_atarist.c",
+            "src/socket/socket_bsd.c",
             "src/sandbox/sandbox_stub.c"
         )
     elseif is_plat("kolibri") then
@@ -75,7 +75,7 @@ target("solo_static")
         add_files(
             "src/parallel/parallel_dos.c",
             "src/serial/serial_dos.c",
-            "src/socket/socket_dos.c",
+            "src/socket/socket_bsd.c",
             "src/sandbox/sandbox_stub.c"
         )
         -- WATT-32 TCP/IP stack integration
@@ -90,7 +90,7 @@ target("solo_static")
         add_files(
             "src/parallel/parallel_os2.c",
             "src/serial/serial_os2.c",
-            "src/socket/socket_os2.c",
+            "src/socket/socket_bsd.c",
             "src/sandbox/sandbox_stub.c"
         )
     elseif is_plat("wince") then
@@ -100,7 +100,7 @@ target("solo_static")
         add_files(
             "src/parallel/parallel_windows_ce.c",
             "src/serial/serial_windows_ce.c",
-            "src/socket/socket_windows_ce.c",
+            "src/socket/socket_bsd.c",
             "src/sandbox/sandbox_stub.c"
         )
     elseif is_plat("windows", "mingw") then
@@ -108,7 +108,7 @@ target("solo_static")
         add_files(
             "src/parallel/parallel_windows_nt.c",
             "src/serial/serial_windows_nt.c",
-            "src/socket/socket_windows_nt.c",
+            "src/socket/socket_bsd.c",
             "src/sandbox/sandbox_stub.c"
         )
     elseif is_plat("plan9") then
@@ -125,7 +125,7 @@ target("solo_static")
         add_files(
             "src/parallel/parallel_posix.c",
             "src/serial/serial_posix.c",
-            "src/socket/socket_posix.c"
+            "src/socket/socket_bsd.c"
         )
         if is_plat("linux") then
             add_files("src/sandbox/sandbox_linux.c")
@@ -181,7 +181,7 @@ local sandbox_driver = is_plat("linux") and "src/sandbox/sandbox_linux.c"
 local is_win = is_plat("windows", "mingw")
 local serial_driver   = is_win and "src/serial/serial_windows_nt.c"   or "src/serial/serial_posix.c"
 local parallel_driver = is_win and "src/parallel/parallel_windows_nt.c" or "src/parallel/parallel_posix.c"
-local socket_driver   = is_win and "src/socket/socket_windows_nt.c"   or "src/socket/socket_posix.c"
+local socket_driver   = "src/socket/socket_bsd.c"
 
 local submodules = {
     platform   = {"src/platform/platform_lua.c", "src/platform/platform.c"},

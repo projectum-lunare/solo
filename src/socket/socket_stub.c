@@ -18,13 +18,11 @@
 #include <solo/socket.h>
 #include "socket_internal.h"
 
-solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char **err_msg)
+solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
     (void)type;
     (void)mode;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("sockets are not supported on this platform");
-    }
+    solo_set_err(err_buf, err_cap, "sockets are not supported on this platform");
     return NULL;
 }
 
@@ -33,39 +31,33 @@ void solo_socket_backend_close(solo_socket_t *sock)
     (void)sock;
 }
 
-solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg)
+solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char *err_buf, size_t err_cap)
 {
     (void)sock;
     (void)host;
     (void)port;
     (void)backlog;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("sockets are not supported on this platform");
-    }
+    solo_set_err(err_buf, err_cap, "sockets are not supported on this platform");
     return SOLO_SOCK_ERROR;
 }
 
-solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg)
+solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char *err_buf, size_t err_cap)
 {
     (void)sock;
     (void)host;
     (void)port;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("sockets are not supported on this platform");
-    }
+    solo_set_err(err_buf, err_cap, "sockets are not supported on this platform");
     return SOLO_SOCK_ERROR;
 }
 
 solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t ip_len,
-                                  int *client_port, char **err_msg)
+                                  int *client_port, char *err_buf, size_t err_cap)
 {
     (void)server;
     (void)client_ip;
     (void)ip_len;
     (void)client_port;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("sockets are not supported on this platform");
-    }
+    solo_set_err(err_buf, err_cap, "sockets are not supported on this platform");
     return NULL;
 }
 
@@ -121,19 +113,21 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
     return SOLO_SOCK_ERROR;
 }
 
-solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
     (void)sock;
     (void)mode;
-    (void)err_msg;
+    (void)err_buf;
+    (void)err_cap;
     return SOLO_SOCK_OK;
 }
 
-solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char *err_buf, size_t err_cap)
 {
     (void)sock;
     (void)timeout_ms;
-    (void)err_msg;
+    (void)err_buf;
+    (void)err_cap;
     return SOLO_SOCK_OK;
 }
 

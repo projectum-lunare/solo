@@ -257,17 +257,17 @@ static int lsocket_bind_sock(lua_State *L)
     const char *host = luaL_optstring(L, 2, "0.0.0.0");
     int port = (int)luaL_optinteger(L, 3, 9100);
     int backlog = (int)luaL_optinteger(L, 4, 128);
-    char *err_msg = NULL;
+    char err_buf[256];
 
+    err_buf[0] = '\0';
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to bind closed socket");
     }
 
-    if (solo_socket_bind_sock(s->handle, host, port, backlog, &err_msg) != SOLO_SOCK_OK) {
+    if (solo_socket_bind_sock(s->handle, host, port, backlog, err_buf, sizeof(err_buf)) != SOLO_SOCK_OK) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "bind failed");
         }
@@ -283,14 +283,15 @@ static int lsocket_connect_sock(lua_State *L)
     lsocket_t *s = (lsocket_t *)luaL_checkudata(L, 1, SOCKET_MT);
     const char *host = luaL_checkstring(L, 2);
     int port = (int)luaL_checkinteger(L, 3);
-    char *err_msg = NULL;
+    char err_buf[256];
     solo_socket_status_t res;
 
+    err_buf[0] = '\0';
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to connect closed socket");
     }
 
-    res = solo_socket_connect_sock(s->handle, host, port, &err_msg);
+    res = solo_socket_connect_sock(s->handle, host, port, err_buf, sizeof(err_buf));
     if (res == SOLO_SOCK_AGAIN) {
         lua_pushnil(L);
         lua_pushstring(L, "again");
@@ -298,9 +299,8 @@ static int lsocket_connect_sock(lua_State *L)
     }
     if (res != SOLO_SOCK_OK) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to connect");
         }
@@ -316,20 +316,20 @@ static int lsocket_accept(lua_State *L)
     lsocket_t *server = (lsocket_t *)luaL_checkudata(L, 1, SOCKET_MT);
     char client_ip[64];
     int client_port = 0;
-    char *err_msg = NULL;
+    char err_buf[256];
     solo_socket_t *client_handle;
 
+    err_buf[0] = '\0';
     if (server->handle == NULL) {
         return luaL_error(L, "attempt to accept on closed server socket");
     }
 
     client_handle =
-        solo_socket_accept(server->handle, client_ip, sizeof(client_ip), &client_port, &err_msg);
+        solo_socket_accept(server->handle, client_ip, sizeof(client_ip), &client_port, err_buf, sizeof(err_buf));
     if (client_handle == NULL) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "again");
         }
@@ -346,17 +346,17 @@ static int lsocket_set_mode(lua_State *L)
 {
     lsocket_t *s = (lsocket_t *)luaL_checkudata(L, 1, SOCKET_MT);
     solo_socket_mode_t mode = parse_mode(L, 2, SOLO_SOCK_BLOCKING);
-    char *err_msg = NULL;
+    char err_buf[256];
 
+    err_buf[0] = '\0';
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to set mode on closed socket");
     }
 
-    if (solo_socket_set_mode(s->handle, mode, &err_msg) != SOLO_SOCK_OK) {
+    if (solo_socket_set_mode(s->handle, mode, err_buf, sizeof(err_buf)) != SOLO_SOCK_OK) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to set socket mode");
         }
@@ -371,17 +371,17 @@ static int lsocket_set_blocking(lua_State *L)
 {
     lsocket_t *s = (lsocket_t *)luaL_checkudata(L, 1, SOCKET_MT);
     int blk = lua_toboolean(L, 2);
-    char *err_msg = NULL;
+    char err_buf[256];
 
+    err_buf[0] = '\0';
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to set mode on closed socket");
     }
 
-    if (solo_socket_set_mode(s->handle, blk ? SOLO_SOCK_BLOCKING : SOLO_SOCK_NONBLOCKING, &err_msg) != SOLO_SOCK_OK) {
+    if (solo_socket_set_mode(s->handle, blk ? SOLO_SOCK_BLOCKING : SOLO_SOCK_NONBLOCKING, err_buf, sizeof(err_buf)) != SOLO_SOCK_OK) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to set blocking mode");
         }
@@ -416,17 +416,17 @@ static int lsocket_set_timeout(lua_State *L)
 {
     lsocket_t *s = (lsocket_t *)luaL_checkudata(L, 1, SOCKET_MT);
     int timeout_ms = (int)luaL_checkinteger(L, 2);
-    char *err_msg = NULL;
+    char err_buf[256];
 
+    err_buf[0] = '\0';
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to set timeout on closed socket");
     }
 
-    if (solo_socket_set_timeout(s->handle, timeout_ms, &err_msg) != SOLO_SOCK_OK) {
+    if (solo_socket_set_timeout(s->handle, timeout_ms, err_buf, sizeof(err_buf)) != SOLO_SOCK_OK) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to set socket timeout");
         }
@@ -541,14 +541,15 @@ static int lsocket_create(lua_State *L)
 {
     solo_socket_type_t type = parse_type(L, 1);
     solo_socket_mode_t mode = parse_mode(L, 2, SOLO_SOCK_BLOCKING);
-    char *err_msg = NULL;
-    solo_socket_t *sock = solo_socket_create(type, mode, &err_msg);
+    char err_buf[256];
+    solo_socket_t *sock;
 
+    err_buf[0] = '\0';
+    sock = solo_socket_create(type, mode, err_buf, sizeof(err_buf));
     if (sock == NULL) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to create socket");
         }
@@ -562,14 +563,15 @@ static int lsocket_create(lua_State *L)
 static int lsocket_tcp(lua_State *L)
 {
     solo_socket_mode_t mode = parse_mode(L, 1, SOLO_SOCK_BLOCKING);
-    char *err_msg = NULL;
-    solo_socket_t *sock = solo_socket_tcp(mode, &err_msg);
+    char err_buf[256];
+    solo_socket_t *sock;
 
+    err_buf[0] = '\0';
+    sock = solo_socket_tcp(mode, err_buf, sizeof(err_buf));
     if (sock == NULL) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to create TCP socket");
         }
@@ -582,24 +584,24 @@ static int lsocket_tcp(lua_State *L)
 
 static int lsocket_udp(lua_State *L)
 {
-    char *err_msg = NULL;
+    char err_buf[256];
     solo_socket_t *sock;
 
+    err_buf[0] = '\0';
     if (lua_gettop(L) >= 2 && lua_isstring(L, 1) && lua_isnumber(L, 2)) {
         const char *host = lua_tostring(L, 1);
         int port = (int)lua_tointeger(L, 2);
         solo_socket_mode_t mode = parse_mode(L, 3, SOLO_SOCK_BLOCKING);
-        sock = solo_socket_udp_bind(host, port, mode, &err_msg);
+        sock = solo_socket_udp_bind(host, port, mode, err_buf, sizeof(err_buf));
     } else {
         solo_socket_mode_t mode = parse_mode(L, 1, SOLO_SOCK_BLOCKING);
-        sock = solo_socket_udp(mode, &err_msg);
+        sock = solo_socket_udp(mode, err_buf, sizeof(err_buf));
     }
 
     if (sock == NULL) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to create UDP socket");
         }
@@ -615,14 +617,15 @@ static int lsocket_udp_bind(lua_State *L)
     const char *host = luaL_optstring(L, 1, "0.0.0.0");
     int port = (int)luaL_optinteger(L, 2, 9100);
     solo_socket_mode_t mode = parse_mode(L, 3, SOLO_SOCK_BLOCKING);
-    char *err_msg = NULL;
-    solo_socket_t *sock = solo_socket_udp_bind(host, port, mode, &err_msg);
+    char err_buf[256];
+    solo_socket_t *sock;
 
+    err_buf[0] = '\0';
+    sock = solo_socket_udp_bind(host, port, mode, err_buf, sizeof(err_buf));
     if (sock == NULL) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to bind UDP socket");
         }
@@ -638,14 +641,15 @@ static int lsocket_connect(lua_State *L)
     const char *host = luaL_checkstring(L, 1);
     int port = (int)luaL_checkinteger(L, 2);
     solo_socket_mode_t mode = parse_mode(L, 3, SOLO_SOCK_BLOCKING);
-    char *err_msg = NULL;
-    solo_socket_t *sock = solo_socket_connect(host, port, mode, &err_msg);
+    char err_buf[256];
+    solo_socket_t *sock;
 
+    err_buf[0] = '\0';
+    sock = solo_socket_connect(host, port, mode, err_buf, sizeof(err_buf));
     if (sock == NULL) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to connect");
         }
@@ -662,14 +666,15 @@ static int lsocket_bind(lua_State *L)
     int port = (int)luaL_optinteger(L, 2, 9100);
     int backlog = (int)luaL_optinteger(L, 3, 128);
     solo_socket_mode_t mode = parse_mode(L, 4, SOLO_SOCK_BLOCKING);
-    char *err_msg = NULL;
-    solo_socket_t *sock = solo_socket_bind(host, port, backlog, mode, &err_msg);
+    char err_buf[256];
+    solo_socket_t *sock;
 
+    err_buf[0] = '\0';
+    sock = solo_socket_bind(host, port, backlog, mode, err_buf, sizeof(err_buf));
     if (sock == NULL) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to bind socket");
         }

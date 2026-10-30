@@ -69,7 +69,7 @@ static solo_serial_status_t solo_serial_set_dtr_internal(HFILE handle, int on)
     return (rc == 0) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
-solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg)
+solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char *err_buf, size_t err_cap)
 {
     HFILE hfile = NULLHANDLE;
     ULONG action = 0;
@@ -78,8 +78,8 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     solo_serial_opts_t default_opts;
     const char *p = (path && path[0] != '\0') ? path : "COM1";
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (opts == NULL) {
@@ -104,11 +104,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
                  OPEN_SHARE_DENYREADWRITE | OPEN_ACCESS_READWRITE, NULL);
 
     if (rc != 0) {
-        if (err_msg != NULL) {
-            char buf[128];
-            snprintf(buf, sizeof(buf), "DosOpen(%s) failed (SYS%04lu)", p, (unsigned long)rc);
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "DosOpen(%s) failed (SYS%04lu)", p, (unsigned long)rc);
         return NULL;
     }
 
@@ -223,9 +219,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     port = (solo_serial_t *)malloc(sizeof(solo_serial_t));
     if (port == NULL) {
         DosClose(hfile);
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Out of memory allocating serial port structure");
-        }
+        solo_set_err(err_buf, err_cap, "Out of memory allocating serial port structure");
         return NULL;
     }
 
@@ -273,37 +267,50 @@ static solo_serial_status_t solo_serial_apply_dcb_timeout(HFILE handle, int time
     return SOLO_SERIAL_OK;
 }
 
-int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
+solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     ULONG written = 0;
     APIRET rc;
 
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+
     if (port == NULL || port->handle == NULLHANDLE || buf == NULL) {
-        return -1;
+        return SOLO_ERROR;
     }
     if (len == 0) {
-        return 0;
+        return SOLO_OK;
     }
 
     rc = DosWrite(port->handle, (PVOID)buf, (ULONG)len, &written);
     if (rc != 0) {
         if (rc == ERROR_TIMEOUT) {
-            return (int)written; /* 0 on timeout without bytes, or partial count */
+            if (written_bytes != NULL) *written_bytes = (size_t)written;
+            return (written > 0) ? SOLO_OK : SOLO_AGAIN;
         }
-        return (written > 0) ? (int)written : -1;
+        if (written_bytes != NULL) *written_bytes = (size_t)written;
+        return (written > 0) ? SOLO_OK : SOLO_ERROR;
     }
 
-    return (int)written;
+    if (written_bytes != NULL) {
+        *written_bytes = (size_t)written;
+    }
+    return SOLO_OK;
 }
 
-int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+solo_status_t solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, size_t *read_bytes, int timeout_ms)
 {
-    ULONG read_bytes = 0;
+    ULONG read_len = 0;
     APIRET rc;
     int need_restore = 0;
 
+    if (read_bytes != NULL) {
+        *read_bytes = 0;
+    }
+
     if (port == NULL || port->handle == NULLHANDLE || buf == NULL || max_len == 0) {
-        return -1;
+        return SOLO_ERROR;
     }
 
     if (timeout_ms >= 0 && timeout_ms != port->timeout_ms) {
@@ -312,7 +319,7 @@ int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout
         }
     }
 
-    rc = DosRead(port->handle, (PVOID)buf, (ULONG)max_len, &read_bytes);
+    rc = DosRead(port->handle, (PVOID)buf, (ULONG)max_len, &read_len);
 
     if (need_restore) {
         solo_serial_apply_dcb_timeout(port->handle, port->timeout_ms);
@@ -320,11 +327,20 @@ int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout
 
     if (rc != 0) {
         if (rc == ERROR_TIMEOUT) {
-            return (read_bytes > 0) ? (int)read_bytes : 0; /* Preserves partial read on timeout */
+            if (read_bytes != NULL) *read_bytes = (size_t)read_len;
+            return (read_len > 0) ? SOLO_OK : SOLO_AGAIN;
         }
-        return -1;
+        return SOLO_ERROR;
     }
-    return (int)read_bytes;
+
+    if (read_len == 0) {
+        return SOLO_AGAIN;
+    }
+
+    if (read_bytes != NULL) {
+        *read_bytes = (size_t)read_len;
+    }
+    return SOLO_OK;
 }
 
 solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)

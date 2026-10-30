@@ -73,7 +73,7 @@ describe("solo.sandbox (Kernel Security & Isolation)", function()
         assert_true(s.status ~= nil)
         assert_eq(s.status.OK, 0)
         assert_eq(s.status.ERROR, -1)
-        assert_eq(s.status.UNSUPPORTED, -2)
+        assert_eq(s.status.UNSUPPORTED, -4)
 
         -- Convenience top-level permission aliases
         assert_eq(s.READ, 1)

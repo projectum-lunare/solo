@@ -29,7 +29,7 @@ struct parallel_port {
     char name[16];
 };
 
-solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
+solo_parallel_t *solo_parallel_open(const char *path, char *err_buf, size_t err_cap)
 {
     const char *dev_name = (path && path[0] != '\0') ? path : "LPT1";
     HFILE hfile = NULLHANDLE;
@@ -37,8 +37,8 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     APIRET rc;
     solo_parallel_t *port;
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     /*
@@ -51,21 +51,15 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
                  OPEN_SHARE_DENYREADWRITE | OPEN_ACCESS_WRITEONLY, NULL);
 
     if (rc != 0) {
-        if (err_msg != NULL) {
-            char buf[128];
-            snprintf(buf, sizeof(buf), "DosOpen(%s) failed (SYS%04lu)", dev_name,
-                     (unsigned long)rc);
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "DosOpen(%s) failed (SYS%04lu)", dev_name,
+                         (unsigned long)rc);
         return NULL;
     }
 
     port = (solo_parallel_t *)malloc(sizeof(solo_parallel_t));
     if (port == NULL) {
         DosClose(hfile);
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Out of memory allocating parallel port structure");
-        }
+        solo_set_err(err_buf, err_cap, "Out of memory allocating parallel port structure");
         return NULL;
     }
 
@@ -76,32 +70,40 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     return port;
 }
 
-int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
+solo_status_t solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     ULONG written = 0;
     APIRET rc;
 
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+
     if (port == NULL || port->handle == NULLHANDLE || buf == NULL) {
-        return -1;
+        return SOLO_ERROR;
     }
     if (len == 0) {
-        return 0;
+        return SOLO_OK;
     }
 
     rc = DosWrite(port->handle, (PVOID)buf, (ULONG)len, &written);
     if (rc != 0) {
-        return -1;
+        return SOLO_ERROR;
     }
 
-    return (int)written;
+    if (written_bytes != NULL) {
+        *written_bytes = (size_t)written;
+    }
+    return SOLO_OK;
 }
 
-int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+solo_status_t solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len, size_t *read_bytes)
 {
     (void)port;
     (void)buf;
     (void)max_len;
-    return -1;
+    if (read_bytes != NULL) *read_bytes = 0;
+    return SOLO_UNSUPPORTED;
 }
 
 solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)

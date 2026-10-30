@@ -29,20 +29,21 @@ static int lsolo_parallel_write(lua_State *L)
     lsolo_parallel_t *p = (lsolo_parallel_t *)luaL_checkudata(L, 1, PARALLEL_PORT_MT);
     size_t len;
     const char *data = luaL_checklstring(L, 2, &len);
-    int res;
+    size_t written = 0;
+    solo_status_t st;
 
     if (p->handle == NULL) {
         return luaL_error(L, "attempt to write to closed parallel port");
     }
 
-    res = solo_parallel_write(p->handle, data, len);
-    if (res < 0) {
+    st = solo_parallel_write(p->handle, data, len, &written);
+    if (st != SOLO_OK) {
         lua_pushnil(L);
         lua_pushstring(L, "I/O error during parallel write");
         return 2;
     }
 
-    lua_pushinteger(L, res);
+    lua_pushinteger(L, (lua_Integer)written);
     return 1;
 }
 
@@ -68,7 +69,8 @@ static int lsolo_parallel_read(lua_State *L)
     lsolo_parallel_t *p = (lsolo_parallel_t *)luaL_checkudata(L, 1, PARALLEL_PORT_MT);
     lua_Integer max_bytes = luaL_optinteger(L, 2, 4096);
     char *buf;
-    int n;
+    size_t read_bytes = 0;
+    solo_status_t st;
 
     if (p->handle == NULL) {
         return luaL_error(L, "attempt to read from closed parallel port");
@@ -83,15 +85,15 @@ static int lsolo_parallel_read(lua_State *L)
         return luaL_error(L, "out of memory allocating parallel read buffer");
     }
 
-    n = solo_parallel_read(p->handle, buf, (size_t)max_bytes);
-    if (n < 0) {
+    st = solo_parallel_read(p->handle, buf, (size_t)max_bytes, &read_bytes);
+    if (st != SOLO_OK) {
         free(buf);
         lua_pushnil(L);
         lua_pushliteral(L, "I/O error or unsupported read on parallel port");
         return 2;
     }
 
-    lua_pushlstring(L, buf, (size_t)n);
+    lua_pushlstring(L, buf, read_bytes);
     free(buf);
     return 1;
 }
@@ -153,10 +155,11 @@ static int lsolo_parallel_close(lua_State *L)
 static int lsolo_parallel_open(lua_State *L)
 {
     const char *path = "LPT1";
-    char *err_msg = NULL;
+    char err_buf[256];
     solo_parallel_t *pp;
     lsolo_parallel_t *p;
 
+    err_buf[0] = '\0';
     if (lua_istable(L, 1)) {
         lua_getfield(L, 1, "path");
         if (lua_isnil(L, -1)) {
@@ -171,12 +174,11 @@ static int lsolo_parallel_open(lua_State *L)
         path = luaL_checkstring(L, 1);
     }
 
-    pp = solo_parallel_open(path, &err_msg);
+    pp = solo_parallel_open(path, err_buf, sizeof(err_buf));
     if (pp == NULL) {
         lua_pushnil(L);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "failed to open parallel device");
         }

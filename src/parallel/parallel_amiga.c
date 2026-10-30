@@ -30,7 +30,7 @@ struct parallel_port {
     int is_open;
 };
 
-solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
+solo_parallel_t *solo_parallel_open(const char *path, char *err_buf, size_t err_cap)
 {
     char dev_name[64];
     ULONG unit = 0;
@@ -40,8 +40,8 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     solo_parallel_t *port = NULL;
     BYTE open_err;
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (path == NULL || path[0] == '\0') {
@@ -66,27 +66,21 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
 
     mp = CreateMsgPort();
     if (mp == NULL) {
-        if (err_msg)
-            *err_msg = safe_strdup("CreateMsgPort() failed");
+        solo_set_err(err_buf, err_cap, "CreateMsgPort() failed");
         return NULL;
     }
 
     io = (struct IOExtPar *)CreateIORequest(mp, sizeof(struct IOExtPar));
     if (io == NULL) {
         DeleteMsgPort(mp);
-        if (err_msg)
-            *err_msg = safe_strdup("CreateIORequest() failed");
+        solo_set_err(err_buf, err_cap, "CreateIORequest() failed");
         return NULL;
     }
 
     open_err = OpenDevice((CONST_STRPTR)dev_name, unit, (struct IORequest *)io, 0);
     if (open_err != 0) {
-        if (err_msg) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "OpenDevice(%s, %lu) failed (error %d)", dev_name, unit,
-                     (int)open_err);
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "OpenDevice(%s, %lu) failed (error %d)", dev_name, unit,
+                         (int)open_err);
         DeleteIORequest((struct IORequest *)io);
         DeleteMsgPort(mp);
         return NULL;
@@ -97,8 +91,7 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
         CloseDevice((struct IORequest *)io);
         DeleteIORequest((struct IORequest *)io);
         DeleteMsgPort(mp);
-        if (err_msg)
-            *err_msg = safe_strdup("Memory allocation failure");
+        solo_set_err(err_buf, err_cap, "Memory allocation failure");
         return NULL;
     }
 
@@ -109,10 +102,17 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     return port;
 }
 
-int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
+solo_status_t solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+
     if (port == NULL || port->io == NULL || buf == NULL || !port->is_open) {
-        return -1;
+        return SOLO_ERROR;
+    }
+    if (len == 0) {
+        return SOLO_OK;
     }
 
     port->io->IOPar.io_Command = CMD_WRITE;
@@ -120,18 +120,22 @@ int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
     port->io->IOPar.io_Length = (ULONG)len;
 
     if (DoIO((struct IORequest *)port->io) != 0) {
-        return -1;
+        return SOLO_ERROR;
     }
 
-    return (int)len;
+    if (written_bytes != NULL) {
+        *written_bytes = len;
+    }
+    return SOLO_OK;
 }
 
-int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+solo_status_t solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len, size_t *read_bytes)
 {
     (void)port;
     (void)buf;
     (void)max_len;
-    return -1;
+    if (read_bytes != NULL) *read_bytes = 0;
+    return SOLO_UNSUPPORTED;
 }
 
 solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)

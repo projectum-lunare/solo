@@ -44,45 +44,35 @@ const char *solo_sandbox_backend_name(int *version_out)
     return "capsicum";
 }
 
-solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
+solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char *err_buf, size_t err_cap)
 {
     (void)path;
     (void)permissions;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("unveil is not supported on FreeBSD (Capsicum operates on capability descriptors, not paths)");
-    }
+    solo_set_err(err_buf, err_cap, "unveil is not supported on FreeBSD (Capsicum operates on capability descriptors, not paths)");
     return SOLO_SANDBOX_UNSUPPORTED;
 }
 
-solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
+solo_sandbox_status_t solo_sandbox_lock(char *err_buf, size_t err_cap)
 {
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (cap_enter() != 0) {
         if (errno == ENOSYS) {
-            if (err_msg != NULL) {
-                *err_msg = safe_strdup("Capsicum capability mode is not supported by the running FreeBSD kernel");
-            }
+            solo_set_err(err_buf, err_cap, "Capsicum capability mode is not supported by the running FreeBSD kernel");
             return SOLO_SANDBOX_UNSUPPORTED;
         }
-        if (err_msg != NULL) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "cap_enter() failed (%s)", strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "cap_enter() failed (%s)", strerror(errno));
         return SOLO_SANDBOX_ERROR;
     }
     return SOLO_SANDBOX_OK;
 }
 
-solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char **err_msg)
+solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char *err_buf, size_t err_cap)
 {
     (void)promises;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("pledge is not supported on FreeBSD (Capsicum does not support pledge)");
-    }
+    solo_set_err(err_buf, err_cap, "pledge is not supported on FreeBSD (Capsicum does not support pledge)");
     return SOLO_SANDBOX_UNSUPPORTED;
 }
 

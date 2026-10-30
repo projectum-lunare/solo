@@ -69,7 +69,7 @@ static const char *proto_name(solo_socket_type_t type)
     return (type == SOLO_SOCK_UDP) ? "udp" : "tcp";
 }
 
-solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char **err_msg)
+solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
     char clone_path[32];
     char conv[16];
@@ -77,17 +77,21 @@ solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mo
     ssize_t n;
     solo_socket_t *sock;
 
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     snprintf(clone_path, sizeof(clone_path), "/net/%s/clone", proto_name(type));
     ctl_fd = open(clone_path, O_RDWR);
     if (ctl_fd < 0) {
-        solo_socket_set_err(err_msg, "Plan 9: cannot open clone file (IP stack mounted?)");
+        solo_set_err(err_buf, err_cap, "Plan 9: cannot open clone file (IP stack mounted?)");
         return NULL;
     }
 
     n = read(ctl_fd, conv, sizeof(conv) - 1);
     if (n <= 0) {
         close(ctl_fd);
-        solo_socket_set_err(err_msg, "Plan 9: failed to allocate conversation line");
+        solo_set_err(err_buf, err_cap, "Plan 9: failed to allocate conversation line");
         return NULL;
     }
     conv[n] = '\0';
@@ -96,7 +100,7 @@ solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mo
     sock = (solo_socket_t *)malloc(sizeof(solo_socket_t));
     if (sock == NULL) {
         close(ctl_fd);
-        solo_socket_set_err(err_msg, "out of memory");
+        solo_set_err(err_buf, err_cap, "out of memory");
         return NULL;
     }
 
@@ -140,25 +144,29 @@ void solo_socket_backend_close(solo_socket_t *sock)
     }
 }
 
-solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg)
+solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char *err_buf, size_t err_cap)
 {
     char cmd[256];
     (void)backlog;
 
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     if (sock == NULL || sock->ctl_fd < 0) {
-        solo_socket_set_err(err_msg, "invalid socket handle");
+        solo_set_err(err_buf, err_cap, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
 
     host = solo_socket_normalize_bind_host(host);
 
     if (format_net_cmd(cmd, sizeof(cmd), "announce", host, port) != 0) {
-        solo_socket_set_err(err_msg, "Plan 9: host name is too long");
+        solo_set_err(err_buf, err_cap, "Plan 9: host name is too long");
         return SOLO_SOCK_ERROR;
     }
 
     if (write(sock->ctl_fd, cmd, strlen(cmd)) < 0) {
-        solo_socket_set_err(err_msg, "Plan 9: announce failed");
+        solo_set_err(err_buf, err_cap, "Plan 9: announce failed");
         return SOLO_SOCK_ERROR;
     }
 
@@ -182,20 +190,24 @@ solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host
     return SOLO_SOCK_OK;
 }
 
-solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg)
+solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char *err_buf, size_t err_cap)
 {
     char cmd[256];
     char data_path[64];
 
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     if (sock == NULL || sock->ctl_fd < 0) {
-        solo_socket_set_err(err_msg, "invalid socket handle");
+        solo_set_err(err_buf, err_cap, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
 
     host = solo_socket_normalize_connect_host(host);
 
     if (format_net_cmd(cmd, sizeof(cmd), "connect", host, port) != 0) {
-        solo_socket_set_err(err_msg, "Plan 9: host name is too long");
+        solo_set_err(err_buf, err_cap, "Plan 9: host name is too long");
         return SOLO_SOCK_ERROR;
     }
 
@@ -204,7 +216,7 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
             (errno == EINPROGRESS || errno == EWOULDBLOCK || errno == EAGAIN)) {
             return SOLO_SOCK_AGAIN;
         }
-        solo_socket_set_err(err_msg, "Plan 9: connection to remote host failed");
+        solo_set_err(err_buf, err_cap, "Plan 9: connection to remote host failed");
         return SOLO_SOCK_ERROR;
     }
 
@@ -212,7 +224,7 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
         snprintf(data_path, sizeof(data_path), "/net/%s/%s/data", proto_name(sock->type), sock->conv_id);
         sock->data_fd = open(data_path, O_RDWR);
         if (sock->data_fd < 0) {
-            solo_socket_set_err(err_msg, "Plan 9: failed to open data stream");
+            solo_set_err(err_buf, err_cap, "Plan 9: failed to open data stream");
             return SOLO_SOCK_ERROR;
         }
 
@@ -228,7 +240,7 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
 }
 
 solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t ip_len,
-                                  int *client_port, char **err_msg)
+                                  int *client_port, char *err_buf, size_t err_cap)
 {
     char listen_path[64];
     char client_conv[16];
@@ -238,8 +250,12 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     ssize_t n;
     solo_socket_t *client_sock;
 
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     if (server == NULL || server->ctl_fd < 0 || !server->is_server) {
-        solo_socket_set_err(err_msg, "invalid server socket");
+        solo_set_err(err_buf, err_cap, "invalid server socket");
         return NULL;
     }
 
@@ -442,10 +458,14 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
     return status;
 }
 
-solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     if (sock == NULL) {
-        solo_socket_set_err(err_msg, "invalid socket handle");
+        solo_set_err(err_buf, err_cap, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
 
@@ -465,10 +485,14 @@ solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_sock
     return SOLO_SOCK_OK;
 }
 
-solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char *err_buf, size_t err_cap)
 {
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     if (sock == NULL) {
-        solo_socket_set_err(err_msg, "invalid socket handle");
+        solo_set_err(err_buf, err_cap, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
     sock->timeout_ms = solo_socket_normalize_timeout(timeout_ms);

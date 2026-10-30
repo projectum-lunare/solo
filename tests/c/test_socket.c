@@ -49,8 +49,8 @@ TEST test_socket_enums(void)
 /*
  * Defensive API validation:
  * Verifies that all socket functions safely handle NULL pointers and invalid
- * input arguments without crashing (segfaulting), and correctly allocate and
- * populate error messages.
+ * input arguments without crashing (segfaulting), and correctly populate
+ * caller-provided error buffers.
  */
 TEST test_socket_null_guards(void)
 {
@@ -59,28 +59,33 @@ TEST test_socket_null_guards(void)
     int port = 0;
     size_t sent = 0;
     size_t received = 0;
-    char *err_msg = NULL;
+    char err_buf[128];
 
     /* Closing a NULL socket must be a safe no-op */
     solo_socket_close(NULL);
 
     /* Connecting to a malformed/nonexistent domain name fails with NULL */
-    ASSERT_EQ(NULL, solo_socket_connect("invalid.host.nonexistent.xyz", 80, SOLO_SOCK_BLOCKING, &err_msg));
-    ASSERT(err_msg != NULL); free(err_msg); err_msg = NULL;
+    err_buf[0] = '\0';
+    ASSERT_EQ(NULL, solo_socket_connect("invalid.host.nonexistent.xyz", 80, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf)));
+    ASSERT(strlen(err_buf) > 0);
 
     /* Binding to an invalid IP address string fails with NULL */
-    ASSERT_EQ(NULL, solo_socket_bind("999.999.999.999", 80, 5, SOLO_SOCK_BLOCKING, &err_msg));
-    ASSERT(err_msg != NULL); free(err_msg); err_msg = NULL;
+    err_buf[0] = '\0';
+    ASSERT_EQ(NULL, solo_socket_bind("999.999.999.999", 80, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf)));
+    ASSERT(strlen(err_buf) > 0);
 
     /* Operations on unallocated/NULL solo_socket_t handles must fail safely */
-    ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_connect_sock(NULL, "127.0.0.1", 80, &err_msg));
-    ASSERT(err_msg != NULL); free(err_msg); err_msg = NULL;
+    err_buf[0] = '\0';
+    ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_connect_sock(NULL, "127.0.0.1", 80, err_buf, sizeof(err_buf)));
+    ASSERT(strlen(err_buf) > 0);
 
-    ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_bind_sock(NULL, "127.0.0.1", 80, 5, &err_msg));
-    ASSERT(err_msg != NULL); free(err_msg); err_msg = NULL;
+    err_buf[0] = '\0';
+    ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_bind_sock(NULL, "127.0.0.1", 80, 5, err_buf, sizeof(err_buf)));
+    ASSERT(strlen(err_buf) > 0);
 
-    ASSERT_EQ(NULL, solo_socket_accept(NULL, src_ip, sizeof(src_ip), &port, &err_msg));
-    ASSERT(err_msg != NULL); free(err_msg); err_msg = NULL;
+    err_buf[0] = '\0';
+    ASSERT_EQ(NULL, solo_socket_accept(NULL, src_ip, sizeof(src_ip), &port, err_buf, sizeof(err_buf)));
+    ASSERT(strlen(err_buf) > 0);
 
     ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_send(NULL, buf, sizeof(buf), &sent));
     ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_recv(NULL, buf, sizeof(buf), &received));
@@ -88,11 +93,13 @@ TEST test_socket_null_guards(void)
     ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_sendto(NULL, buf, sizeof(buf), "127.0.0.1", 80, &sent));
     ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_recvfrom(NULL, buf, sizeof(buf), src_ip, sizeof(src_ip), &port, &received));
 
-    ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_set_mode(NULL, SOLO_SOCK_NONBLOCKING, &err_msg));
-    ASSERT(err_msg != NULL); free(err_msg); err_msg = NULL;
+    err_buf[0] = '\0';
+    ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_set_mode(NULL, SOLO_SOCK_NONBLOCKING, err_buf, sizeof(err_buf)));
+    ASSERT(strlen(err_buf) > 0);
 
-    ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_set_timeout(NULL, 100, &err_msg));
-    ASSERT(err_msg != NULL); free(err_msg); err_msg = NULL;
+    err_buf[0] = '\0';
+    ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_set_timeout(NULL, 100, err_buf, sizeof(err_buf)));
+    ASSERT(strlen(err_buf) > 0);
 
     ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_poll(NULL, 1, 10));
     ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_wait(NULL, SOLO_SOCK_POLL_READ, 10));
@@ -111,7 +118,7 @@ TEST test_socket_null_guards(void)
  */
 TEST test_socket_tcp_sync(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     int port = 19930;
     solo_socket_t *server;
     solo_socket_t *client;
@@ -125,36 +132,26 @@ TEST test_socket_tcp_sync(void)
     solo_socket_status_t st;
 
     /* Step 1: Bind TCP server socket. Fallback to port+1 if port is busy */
-    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     if (!server) {
-        if (err_msg != NULL) {
-            free(err_msg);
-            err_msg = NULL;
-        }
         port = 19931;
-        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+        err_buf[0] = '\0';
+        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     }
     ASSERT(server != NULL);
     ASSERT_EQ(SOLO_SOCK_TCP, solo_socket_get_type(server));
     ASSERT_EQ(SOLO_SOCK_BLOCKING, solo_socket_get_mode(server));
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-
     /* Step 2: Connect TCP client socket */
-    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(client != NULL);
     ASSERT_EQ(SOLO_SOCK_TCP, solo_socket_get_type(client));
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-
     /* Step 3: Accept client connection on server */
-    accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, &err_msg);
+    err_buf[0] = '\0';
+    accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, err_buf, sizeof(err_buf));
     ASSERT(accepted != NULL);
 
     /* Step 4: Transmit data from client to server */
@@ -173,10 +170,6 @@ TEST test_socket_tcp_sync(void)
     solo_socket_close(client);
     solo_socket_close(accepted);
     solo_socket_close(server);
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
     PASS();
 }
 
@@ -191,7 +184,7 @@ TEST test_socket_tcp_sync(void)
  */
 TEST test_socket_tcp_async(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     int port = 19940;
     solo_socket_t *server;
     solo_socket_t *client;
@@ -206,41 +199,32 @@ TEST test_socket_tcp_async(void)
     solo_socket_status_t st;
 
     /* Bind server in non-blocking mode */
-    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_NONBLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_NONBLOCKING, err_buf, sizeof(err_buf));
     if (!server) {
-        if (err_msg != NULL) {
-            free(err_msg);
-            err_msg = NULL;
-        }
         port = 19941;
-        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_NONBLOCKING, &err_msg);
+        err_buf[0] = '\0';
+        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_NONBLOCKING, err_buf, sizeof(err_buf));
     }
     ASSERT(server != NULL);
     ASSERT_EQ(SOLO_SOCK_NONBLOCKING, solo_socket_get_mode(server));
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-
     /* In non-blocking mode with no pending connections, accept() returns NULL without error */
-    accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, &err_msg);
+    err_buf[0] = '\0';
+    accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, err_buf, sizeof(err_buf));
     ASSERT(accepted == NULL);
-    ASSERT(err_msg == NULL);
 
     /* Client initiates connection */
-    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(client != NULL);
 
     /* Poll server until incoming connection is ready to be accepted */
     ev = solo_socket_wait(server, SOLO_SOCK_POLL_READ, 1000);
     ASSERT(ev & SOLO_SOCK_POLL_READ);
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-    accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, &err_msg);
+    err_buf[0] = '\0';
+    accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, err_buf, sizeof(err_buf));
     ASSERT(accepted != NULL);
     ASSERT_EQ(SOLO_SOCK_NONBLOCKING, solo_socket_get_mode(accepted));
 
@@ -268,10 +252,6 @@ TEST test_socket_tcp_async(void)
     solo_socket_close(client);
     solo_socket_close(accepted);
     solo_socket_close(server);
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
     PASS();
 }
 
@@ -283,7 +263,7 @@ TEST test_socket_tcp_async(void)
  */
 TEST test_socket_tcp_streaming(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     int port = 19935;
     solo_socket_t *server = NULL;
     solo_socket_t *client = NULL;
@@ -304,18 +284,21 @@ TEST test_socket_tcp_streaming(void)
         send_buf[i] = (char)(i & 0xFF);
     }
 
-    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     if (!server) {
-        if (err_msg) { free(err_msg); err_msg = NULL; }
         port++;
-        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+        err_buf[0] = '\0';
+        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     }
     ASSERT(server != NULL);
 
-    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(client != NULL);
 
-    accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, &err_msg);
+    err_buf[0] = '\0';
+    accepted = solo_socket_accept(server, client_ip, sizeof(client_ip), &client_port, err_buf, sizeof(err_buf));
     ASSERT(accepted != NULL);
 
     /* Stream 64 KB in chunks of up to 4 KB each, draining until complete */
@@ -361,7 +344,7 @@ TEST test_socket_tcp_streaming(void)
  */
 TEST test_socket_udp_sync(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     int port = 19950;
     solo_socket_t *server;
     solo_socket_t *client;
@@ -375,25 +358,19 @@ TEST test_socket_udp_sync(void)
     solo_socket_status_t st;
 
     /* Bind server UDP socket */
-    server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     if (!server) {
-        if (err_msg != NULL) {
-            free(err_msg);
-            err_msg = NULL;
-        }
         port = 19951;
-        server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+        err_buf[0] = '\0';
+        server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     }
     ASSERT(server != NULL);
     ASSERT_EQ(SOLO_SOCK_UDP, solo_socket_get_type(server));
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-
     /* Create un-bound client UDP socket */
-    client = solo_socket_udp(SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    client = solo_socket_udp(SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(client != NULL);
     ASSERT_EQ(SOLO_SOCK_UDP, solo_socket_get_type(client));
 
@@ -425,10 +402,6 @@ TEST test_socket_udp_sync(void)
 
     solo_socket_close(client);
     solo_socket_close(server);
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
     PASS();
 }
 
@@ -442,7 +415,7 @@ TEST test_socket_udp_sync(void)
  */
 TEST test_socket_udp_async(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     int port = 19960;
     solo_socket_t *server;
     solo_socket_t *client;
@@ -453,14 +426,12 @@ TEST test_socket_udp_async(void)
     size_t received = 0;
     solo_socket_status_t st;
 
-    server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_NONBLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_NONBLOCKING, err_buf, sizeof(err_buf));
     if (!server) {
-        if (err_msg != NULL) {
-            free(err_msg);
-            err_msg = NULL;
-        }
         port = 19961;
-        server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_NONBLOCKING, &err_msg);
+        err_buf[0] = '\0';
+        server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_NONBLOCKING, err_buf, sizeof(err_buf));
     }
     ASSERT(server != NULL);
     ASSERT_EQ(SOLO_SOCK_NONBLOCKING, solo_socket_get_mode(server));
@@ -474,12 +445,8 @@ TEST test_socket_udp_async(void)
     ev = solo_socket_wait(server, SOLO_SOCK_POLL_READ, 50);
     ASSERT_EQ(0, ev);
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-
-    client = solo_socket_udp(SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    client = solo_socket_udp(SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(client != NULL);
 
     /* Send datagram */
@@ -500,10 +467,6 @@ TEST test_socket_udp_async(void)
 
     solo_socket_close(client);
     solo_socket_close(server);
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
     PASS();
 }
 
@@ -514,7 +477,7 @@ TEST test_socket_udp_async(void)
  */
 TEST test_socket_udp_multigram(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     int port = 19940;
     solo_socket_t *server = NULL;
     solo_socket_t *client = NULL;
@@ -527,15 +490,17 @@ TEST test_socket_udp_multigram(void)
     solo_socket_status_t st;
     int i;
 
-    server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     if (!server) {
-        if (err_msg) { free(err_msg); err_msg = NULL; }
         port++;
-        server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+        err_buf[0] = '\0';
+        server = solo_socket_udp_bind("127.0.0.1", port, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     }
     ASSERT(server != NULL);
 
-    client = solo_socket_udp(SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    client = solo_socket_udp(SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(client != NULL);
 
     /* Send and receive 20 individual datagrams in lockstep */
@@ -567,7 +532,7 @@ TEST test_socket_udp_multigram(void)
  */
 TEST test_socket_timeout(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     int port = 19970;
     solo_socket_t *server;
     solo_socket_t *client;
@@ -576,38 +541,26 @@ TEST test_socket_timeout(void)
     size_t received = 0;
     solo_socket_status_t st;
 
-    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     if (!server) {
-        if (err_msg != NULL) {
-            free(err_msg);
-            err_msg = NULL;
-        }
         port = 19971;
-        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+        err_buf[0] = '\0';
+        server = solo_socket_bind("127.0.0.1", port, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     }
     ASSERT(server != NULL);
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(client != NULL);
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-    accepted = solo_socket_accept(server, NULL, 0, NULL, &err_msg);
+    err_buf[0] = '\0';
+    accepted = solo_socket_accept(server, NULL, 0, NULL, err_buf, sizeof(err_buf));
     ASSERT(accepted != NULL);
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-
     /* Configure 100ms timeout */
-    ASSERT_EQ(SOLO_SOCK_OK, solo_socket_set_timeout(accepted, 100, &err_msg));
+    err_buf[0] = '\0';
+    ASSERT_EQ(SOLO_SOCK_OK, solo_socket_set_timeout(accepted, 100, err_buf, sizeof(err_buf)));
 
     /* Idle recv() must return SOLO_SOCK_AGAIN after ~100ms */
     st = solo_socket_recv(accepted, buf, sizeof(buf), &received);
@@ -617,71 +570,55 @@ TEST test_socket_timeout(void)
     solo_socket_close(client);
     solo_socket_close(accepted);
     solo_socket_close(server);
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
     PASS();
 }
 
 /*
- * Error String Memory Ownership Contract Test:
- * Verifies that functions accepting `char **err_msg` properly allocate a heap
- * string on failure and that caller is responsible for calling free().
+ * Caller-Provided Error Buffer Contract Test:
+ * Verifies that functions accepting `(err_buf, err_cap)` populate the buffer
+ * on failure with a non-empty descriptive error string without heap allocation.
  */
 TEST test_socket_err_msg_ownership(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     solo_socket_status_t st;
     solo_socket_t *sock;
 
-    /* 1. Invalid handle to solo_socket_set_mode must allocate *err_msg */
-    st = solo_socket_set_mode(NULL, SOLO_SOCK_BLOCKING, &err_msg);
+    /* 1. Invalid handle to solo_socket_set_mode */
+    err_buf[0] = '\0';
+    st = solo_socket_set_mode(NULL, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT_EQ(SOLO_SOCK_ERROR, st);
-    ASSERT(err_msg != NULL);
-    ASSERT(strlen(err_msg) > 0);
-    free(err_msg);
-    err_msg = NULL;
+    ASSERT(strlen(err_buf) > 0);
 
-    /* 2. Invalid handle to solo_socket_set_timeout must allocate *err_msg */
-    st = solo_socket_set_timeout(NULL, 1000, &err_msg);
+    /* 2. Invalid handle to solo_socket_set_timeout */
+    err_buf[0] = '\0';
+    st = solo_socket_set_timeout(NULL, 1000, err_buf, sizeof(err_buf));
     ASSERT_EQ(SOLO_SOCK_ERROR, st);
-    ASSERT(err_msg != NULL);
-    ASSERT(strlen(err_msg) > 0);
-    free(err_msg);
-    err_msg = NULL;
+    ASSERT(strlen(err_buf) > 0);
 
     /* 3. Invalid handle to solo_socket_connect_sock */
-    st = solo_socket_connect_sock(NULL, "127.0.0.1", 80, &err_msg);
+    err_buf[0] = '\0';
+    st = solo_socket_connect_sock(NULL, "127.0.0.1", 80, err_buf, sizeof(err_buf));
     ASSERT_EQ(SOLO_SOCK_ERROR, st);
-    ASSERT(err_msg != NULL);
-    ASSERT(strlen(err_msg) > 0);
-    free(err_msg);
-    err_msg = NULL;
+    ASSERT(strlen(err_buf) > 0);
 
     /* 4. Invalid handle to solo_socket_bind_sock */
-    st = solo_socket_bind_sock(NULL, "127.0.0.1", 80, 5, &err_msg);
+    err_buf[0] = '\0';
+    st = solo_socket_bind_sock(NULL, "127.0.0.1", 80, 5, err_buf, sizeof(err_buf));
     ASSERT_EQ(SOLO_SOCK_ERROR, st);
-    ASSERT(err_msg != NULL);
-    ASSERT(strlen(err_msg) > 0);
-    free(err_msg);
-    err_msg = NULL;
+    ASSERT(strlen(err_buf) > 0);
 
     /* 5. Invalid handle to solo_socket_accept */
-    sock = solo_socket_accept(NULL, NULL, 0, NULL, &err_msg);
+    err_buf[0] = '\0';
+    sock = solo_socket_accept(NULL, NULL, 0, NULL, err_buf, sizeof(err_buf));
     ASSERT(sock == NULL);
-    ASSERT(err_msg != NULL);
-    ASSERT(strlen(err_msg) > 0);
-    free(err_msg);
-    err_msg = NULL;
+    ASSERT(strlen(err_buf) > 0);
 
     /* 6. Invalid address to solo_socket_bind */
-    sock = solo_socket_bind("999.999.999.999", 80, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    sock = solo_socket_bind("999.999.999.999", 80, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(sock == NULL);
-    ASSERT(err_msg != NULL);
-    ASSERT(strlen(err_msg) > 0);
-    free(err_msg);
-    err_msg = NULL;
+    ASSERT(strlen(err_buf) > 0);
 
     PASS();
 }
@@ -693,11 +630,12 @@ TEST test_socket_err_msg_ownership(void)
  */
 TEST test_socket_connection_refused(void)
 {
-    char *err_msg = NULL;
-    solo_socket_t *s = solo_socket_connect("127.0.0.1", 1, SOLO_SOCK_BLOCKING, &err_msg);
+    char err_buf[128];
+    solo_socket_t *s;
+    err_buf[0] = '\0';
+    s = solo_socket_connect("127.0.0.1", 1, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT_EQ(NULL, s);
-    ASSERT(err_msg != NULL);
-    free(err_msg);
+    ASSERT(strlen(err_buf) > 0);
     PASS();
 }
 
@@ -708,44 +646,32 @@ TEST test_socket_connection_refused(void)
  */
 TEST test_socket_ipv4_localhost(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     int port = 19980;
     solo_socket_t *server;
     solo_socket_t *client;
     solo_socket_t *accepted;
 
-    server = solo_socket_bind("localhost", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    server = solo_socket_bind("localhost", port, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     if (!server) {
-        if (err_msg != NULL) {
-            free(err_msg);
-            err_msg = NULL;
-        }
         port = 19981;
-        server = solo_socket_bind("localhost", port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+        err_buf[0] = '\0';
+        server = solo_socket_bind("localhost", port, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     }
     ASSERT(server != NULL);
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-    client = solo_socket_connect("localhost", port, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    client = solo_socket_connect("localhost", port, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(client != NULL);
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-    accepted = solo_socket_accept(server, NULL, 0, NULL, &err_msg);
+    err_buf[0] = '\0';
+    accepted = solo_socket_accept(server, NULL, 0, NULL, err_buf, sizeof(err_buf));
     ASSERT(accepted != NULL);
 
     solo_socket_close(client);
     solo_socket_close(accepted);
     solo_socket_close(server);
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
     PASS();
 }
 
@@ -756,45 +682,33 @@ TEST test_socket_ipv4_localhost(void)
  */
 TEST test_socket_ipv4_bind_any(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     int port = 19985;
     solo_socket_t *server;
     solo_socket_t *client;
     solo_socket_t *accepted;
 
     /* Passing address NULL binds to INADDR_ANY (0.0.0.0) */
-    server = solo_socket_bind(NULL, port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    server = solo_socket_bind(NULL, port, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     if (!server) {
-        if (err_msg != NULL) {
-            free(err_msg);
-            err_msg = NULL;
-        }
         port = 19986;
-        server = solo_socket_bind(NULL, port, 5, SOLO_SOCK_BLOCKING, &err_msg);
+        err_buf[0] = '\0';
+        server = solo_socket_bind(NULL, port, 5, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     }
     ASSERT(server != NULL);
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    client = solo_socket_connect("127.0.0.1", port, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(client != NULL);
 
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
-    accepted = solo_socket_accept(server, NULL, 0, NULL, &err_msg);
+    err_buf[0] = '\0';
+    accepted = solo_socket_accept(server, NULL, 0, NULL, err_buf, sizeof(err_buf));
     ASSERT(accepted != NULL);
 
     solo_socket_close(client);
     solo_socket_close(accepted);
     solo_socket_close(server);
-    if (err_msg != NULL) {
-        free(err_msg);
-        err_msg = NULL;
-    }
     PASS();
 }
 
@@ -810,7 +724,7 @@ TEST test_socket_ipv4_bind_any(void)
  */
 TEST test_socket_poll(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     int p1 = 19992;
     int p2 = 19993;
     solo_socket_t *s1 = NULL;
@@ -823,20 +737,23 @@ TEST test_socket_poll(void)
     size_t recvd = 0;
 
     /* Bind s1 */
-    s1 = solo_socket_udp_bind("127.0.0.1", p1, SOLO_SOCK_NONBLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    s1 = solo_socket_udp_bind("127.0.0.1", p1, SOLO_SOCK_NONBLOCKING, err_buf, sizeof(err_buf));
     if (!s1) {
-        if (err_msg) { free(err_msg); err_msg = NULL; }
         p1 = 19994;
         p2 = 19995;
-        s1 = solo_socket_udp_bind("127.0.0.1", p1, SOLO_SOCK_NONBLOCKING, &err_msg);
+        err_buf[0] = '\0';
+        s1 = solo_socket_udp_bind("127.0.0.1", p1, SOLO_SOCK_NONBLOCKING, err_buf, sizeof(err_buf));
     }
     ASSERT(s1 != NULL);
 
     /* Bind s2 */
-    s2 = solo_socket_udp_bind("127.0.0.1", p2, SOLO_SOCK_NONBLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    s2 = solo_socket_udp_bind("127.0.0.1", p2, SOLO_SOCK_NONBLOCKING, err_buf, sizeof(err_buf));
     ASSERT(s2 != NULL);
 
-    cli = solo_socket_udp(SOLO_SOCK_BLOCKING, &err_msg);
+    err_buf[0] = '\0';
+    cli = solo_socket_udp(SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     ASSERT(cli != NULL);
 
     /* Setup pollfd array for both sockets */
@@ -871,7 +788,6 @@ TEST test_socket_poll(void)
     solo_socket_close(cli);
     solo_socket_close(s2);
     solo_socket_close(s1);
-    if (err_msg) free(err_msg);
     PASS();
 }
 

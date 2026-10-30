@@ -115,50 +115,17 @@ void solo_socket_ms_to_timeval(int timeout_ms, long *sec, long *usec)
 }
 
 /* =============================================================================
- * Shared Error Reporting
- * ============================================================================= */
-
-void solo_socket_set_err(char **err_msg, const char *msg)
-{
-    if (err_msg != NULL) {
-        if (*err_msg != NULL) {
-            free(*err_msg);
-            *err_msg = NULL;
-        }
-        if (msg != NULL) {
-            *err_msg = safe_strdup(msg);
-        }
-    }
-}
-
-void solo_socket_set_err_fmt(char **err_msg, const char *fmt, ...)
-{
-    if (err_msg != NULL) {
-        char buf[256];
-        va_list ap;
-        va_start(ap, fmt);
-#if defined(_MSC_VER) && _MSC_VER < 1900
-        _vsnprintf(buf, sizeof(buf), fmt, ap);
-#else
-        vsnprintf(buf, sizeof(buf), fmt, ap);
-#endif
-        va_end(ap);
-        solo_socket_set_err(err_msg, buf);
-    }
-}
-
-/* =============================================================================
  * Lifecycle & Creation Wrappers
  * ============================================================================= */
 
-solo_socket_t *solo_socket_tcp(solo_socket_mode_t mode, char **err_msg)
+solo_socket_t *solo_socket_tcp(solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
-    return solo_socket_create(SOLO_SOCK_TCP, mode, err_msg);
+    return solo_socket_create(SOLO_SOCK_TCP, mode, err_buf, err_cap);
 }
 
-solo_socket_t *solo_socket_udp(solo_socket_mode_t mode, char **err_msg)
+solo_socket_t *solo_socket_udp(solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
-    return solo_socket_create(SOLO_SOCK_UDP, mode, err_msg);
+    return solo_socket_create(SOLO_SOCK_UDP, mode, err_buf, err_cap);
 }
 
 void solo_socket_close(solo_socket_t *sock)
@@ -169,18 +136,18 @@ void solo_socket_close(solo_socket_t *sock)
     }
 }
 
-solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_socket_mode_t mode, char **err_msg)
+solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
     solo_socket_t *sock;
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
-    sock = solo_socket_tcp(mode, err_msg);
+    sock = solo_socket_tcp(mode, err_buf, err_cap);
     if (sock == NULL) {
         return NULL;
     }
 
-    if (solo_socket_bind_sock(sock, host, port, backlog, err_msg) != SOLO_SOCK_OK) {
+    if (solo_socket_bind_sock(sock, host, port, backlog, err_buf, err_cap) != SOLO_SOCK_OK) {
         solo_socket_close(sock);
         return NULL;
     }
@@ -188,18 +155,18 @@ solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_so
     return sock;
 }
 
-solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
+solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
     solo_socket_t *sock;
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
-    sock = solo_socket_udp(mode, err_msg);
+    sock = solo_socket_udp(mode, err_buf, err_cap);
     if (sock == NULL) {
         return NULL;
     }
 
-    if (solo_socket_bind_sock(sock, host, port, 0, err_msg) != SOLO_SOCK_OK) {
+    if (solo_socket_bind_sock(sock, host, port, 0, err_buf, err_cap) != SOLO_SOCK_OK) {
         solo_socket_close(sock);
         return NULL;
     }
@@ -207,19 +174,19 @@ solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode
     return sock;
 }
 
-solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char **err_msg)
+solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
     solo_socket_status_t st;
     solo_socket_t *sock;
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
-    sock = solo_socket_tcp(mode, err_msg);
+    sock = solo_socket_tcp(mode, err_buf, err_cap);
     if (sock == NULL) {
         return NULL;
     }
 
-    st = solo_socket_connect_sock(sock, host, port, err_msg);
+    st = solo_socket_connect_sock(sock, host, port, err_buf, err_cap);
     if (st != SOLO_SOCK_OK && st != SOLO_SOCK_AGAIN) {
         solo_socket_close(sock);
         return NULL;
@@ -318,33 +285,33 @@ int solo_socket_get_fd(const solo_socket_t *sock)
     return SOLO_SOCK_FD(sock);
 }
 
-solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
+solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
     if (!SOLO_SOCK_IS_VALID(sock)) {
-        solo_socket_set_err(err_msg, "invalid socket handle");
+        solo_socket_set_err(err_buf, err_cap, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
-    if (solo_socket_backend_set_mode(sock, mode, err_msg) != SOLO_SOCK_OK) {
+    if (solo_socket_backend_set_mode(sock, mode, err_buf, err_cap) != SOLO_SOCK_OK) {
         return SOLO_SOCK_ERROR;
     }
     sock->mode = mode;
     return SOLO_SOCK_OK;
 }
 
-solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
+solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char *err_buf, size_t err_cap)
 {
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
     if (!SOLO_SOCK_IS_VALID(sock)) {
-        solo_socket_set_err(err_msg, "invalid socket handle");
+        solo_socket_set_err(err_buf, err_cap, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
     timeout_ms = solo_socket_normalize_timeout(timeout_ms);
-    if (solo_socket_backend_set_timeout(sock, timeout_ms, err_msg) != SOLO_SOCK_OK) {
+    if (solo_socket_backend_set_timeout(sock, timeout_ms, err_buf, err_cap) != SOLO_SOCK_OK) {
         return SOLO_SOCK_ERROR;
     }
     sock->timeout_ms = timeout_ms;

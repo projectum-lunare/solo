@@ -12,21 +12,13 @@
 #define SOLO_PARALLEL_H
 
 #include <stddef.h>
+#include <solo/types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct parallel_port solo_parallel_t;
-
-/*
- * Parallel operation status codes.
- */
-typedef enum {
-    SOLO_PARALLEL_OK          =  0,
-    SOLO_PARALLEL_ERROR       = -1,
-    SOLO_PARALLEL_UNSUPPORTED = -2
-} solo_parallel_status_t;
 
 /*
  * IEEE 1284 / Centronics parallel port modes.
@@ -53,24 +45,23 @@ typedef enum {
 /*
  * Opens a parallel / Centronics port (IEEE 1284 / LPT) for direct
  * communication with impact printers.
- * On failure, returns NULL and populates *err_msg with a dynamically
- * allocated string (if err_msg != NULL). The caller owns the string and
- * must release it with free().
+ * On failure, returns NULL and writes descriptive error text into err_buf (if non-NULL).
+ * Does not allocate dynamic heap memory for error strings.
  */
-solo_parallel_t *solo_parallel_open(const char *path, char **err_msg);
+solo_parallel_t *solo_parallel_open(const char *path, char *err_buf, size_t err_cap);
 
 /*
- * Writes data to the parallel port. Returns the number of bytes written,
- * or -1 on error. If partial bytes are accepted before error, returns the
- * positive count of bytes transferred.
+ * Writes data to the parallel port. Returns SOLO_OK on success (with *written_bytes populated),
+ * or SOLO_ERROR on failure.
  */
-int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len);
+solo_status_t solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len, size_t *written_bytes);
 
 /*
  * Reads reverse data from the parallel port (IEEE 1284 Nibble/Byte/EPP/ECP modes).
- * Returns the number of bytes read, or -1 on error or if unsupported.
+ * Returns SOLO_OK on success (with *read_bytes populated), SOLO_UNSUPPORTED if mode/hardware
+ * does not support reverse reading, or SOLO_ERROR on failure.
  */
-int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len);
+solo_status_t solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len, size_t *read_bytes);
 
 /*
  * Queries current Centronics status pins (BUSY, ACK, PE, SLCT, FAULT).

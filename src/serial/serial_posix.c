@@ -71,7 +71,7 @@ static int get_posix_baud(int baud, speed_t *out_speed)
     }
 }
 
-solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg)
+solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char *err_buf, size_t err_cap)
 {
     int fd;
     struct termios tio;
@@ -81,8 +81,8 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
 
     const char *target = (path && path[0] != '\0') ? path : "/dev/ttyS0";
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (opts == NULL) {
@@ -99,42 +99,28 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
 
     /* Validate baud rate */
     if (get_posix_baud(opts->baud, &speed) != 0) {
-        if (err_msg != NULL) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "unsupported baud rate %d", opts->baud);
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "unsupported baud rate %d", opts->baud);
         return NULL;
     }
 
     /* Open device non-blocking first to avoid hanging on DCD / carrier */
     fd = open(target, O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd < 0) {
-        if (err_msg != NULL) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "open(%s) failed: %s", target, strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "open(%s) failed: %s", target, strerror(errno));
         return NULL;
     }
 
     port = (solo_serial_t *)malloc(sizeof(solo_serial_t));
     if (port == NULL) {
         close(fd);
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Memory allocation failure");
-        }
+        solo_set_err(err_buf, err_cap, "Memory allocation failure");
         return NULL;
     }
     port->fd = fd;
     port->timeout_ms = opts->timeout_ms;
 
     if (tcgetattr(fd, &port->orig_tio) != 0) {
-        if (err_msg != NULL) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "tcgetattr failed: %s", strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "tcgetattr failed: %s", strerror(errno));
         close(fd);
         free(port);
         return NULL;
@@ -169,9 +155,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
 #ifdef CMSPAR
         tio.c_cflag |= (PARENB | CMSPAR | PARODD);
 #else
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("mark parity is unsupported on this platform");
-        }
+        solo_set_err(err_buf, err_cap, "mark parity is unsupported on this platform");
         close(fd);
         free(port);
         return NULL;
@@ -181,19 +165,13 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
         tio.c_cflag |= (PARENB | CMSPAR);
         tio.c_cflag &= ~PARODD;
 #else
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("space parity is unsupported on this platform");
-        }
+        solo_set_err(err_buf, err_cap, "space parity is unsupported on this platform");
         close(fd);
         free(port);
         return NULL;
 #endif
     } else {
-        if (err_msg != NULL) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "invalid parity option '%c'", opts->parity);
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "invalid parity option '%c'", opts->parity);
         close(fd);
         free(port);
         return NULL;
@@ -241,11 +219,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     /* Apply attributes */
     tcflush(fd, TCIFLUSH);
     if (tcsetattr(fd, TCSANOW, &tio) != 0) {
-        if (err_msg != NULL) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "tcsetattr failed: %s", strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "tcsetattr failed: %s", strerror(errno));
         close(fd);
         free(port);
         return NULL;
@@ -382,17 +356,21 @@ solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms
     return SOLO_SERIAL_OK;
 }
 
-int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
+solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     size_t total_written = 0;
     long long deadline_ms = 0;
     int has_timeout = 0;
 
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+
     if (port == NULL || port->fd < 0 || buf == NULL) {
-        return -1;
+        return SOLO_ERROR;
     }
     if (len == 0) {
-        return 0;
+        return SOLO_OK;
     }
 
     if (port->timeout_ms >= 0) {
@@ -418,7 +396,10 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
                 now_ms = (long long)ts.tv_sec * 1000LL + (ts.tv_nsec / 1000000LL);
                 if (now_ms >= deadline_ms) {
                     /* Total deadline expired */
-                    return (int)total_written;
+                    if (written_bytes != NULL) {
+                        *written_bytes = total_written;
+                    }
+                    return (total_written > 0) ? SOLO_OK : SOLO_AGAIN;
                 }
                 poll_timeout = (int)(deadline_ms - now_ms);
             } else {
@@ -434,11 +415,17 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
             } while (pr < 0 && errno == EINTR);
 
             if (pr < 0) {
-                return (total_written > 0) ? (int)total_written : -1;
+                if (written_bytes != NULL) {
+                    *written_bytes = total_written;
+                }
+                return (total_written > 0) ? SOLO_OK : SOLO_ERROR;
             }
             if (pr == 0) {
                 /* Poll timed out before descriptor became writable */
-                return (int)total_written;
+                if (written_bytes != NULL) {
+                    *written_bytes = total_written;
+                }
+                return (total_written > 0) ? SOLO_OK : SOLO_AGAIN;
             }
         }
 
@@ -452,7 +439,10 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
                     continue;
                 }
             }
-            return (total_written > 0) ? (int)total_written : -1;
+            if (written_bytes != NULL) {
+                *written_bytes = total_written;
+            }
+            return (total_written > 0) ? SOLO_OK : SOLO_ERROR;
         }
         if (n == 0) {
             break;
@@ -460,16 +450,23 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
         total_written += (size_t)n;
     }
 
-    return (int)total_written;
+    if (written_bytes != NULL) {
+        *written_bytes = total_written;
+    }
+    return SOLO_OK;
 }
 
-int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+solo_status_t solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, size_t *read_bytes, int timeout_ms)
 {
     ssize_t n;
     int eff_timeout;
 
+    if (read_bytes != NULL) {
+        *read_bytes = 0;
+    }
+
     if (port == NULL || port->fd < 0 || buf == NULL || max_len == 0) {
-        return -1;
+        return SOLO_ERROR;
     }
 
     /*
@@ -501,7 +498,7 @@ int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout
                 clock_gettime(CLOCK_MONOTONIC, &ts);
                 now_ms = (long long)ts.tv_sec * 1000LL + (ts.tv_nsec / 1000000LL);
                 if (now_ms >= deadline_ms) {
-                    return 0; /* Deadline expired: timeout */
+                    return SOLO_AGAIN; /* Deadline expired: timeout */
                 }
                 current_timeout = (int)(deadline_ms - now_ms);
             } else {
@@ -513,10 +510,10 @@ int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout
                 if (errno == EINTR) {
                     continue; /* Retry poll on signal interrupt until deadline */
                 }
-                return -1; /* True poll error */
+                return SOLO_ERROR; /* True poll error */
             }
             if (pr == 0) {
-                return 0; /* Timeout: no data ready */
+                return SOLO_AGAIN; /* Timeout: no data ready */
             }
             break; /* File descriptor ready for reading */
         }
@@ -528,12 +525,15 @@ int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout
 
     if (n < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return 0;
+            return SOLO_AGAIN;
         }
-        return -1;
+        return SOLO_ERROR;
     }
 
-    return (int)n;
+    if (read_bytes != NULL) {
+        *read_bytes = (size_t)n;
+    }
+    return SOLO_OK;
 }
 
 int solo_serial_drain(solo_serial_t *port)

@@ -33,13 +33,13 @@ const char *solo_sandbox_backend_name(int *version_out)
     return "openbsd";
 }
 
-solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
+solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char *err_buf, size_t err_cap)
 {
     char mode[8];
     int idx = 0;
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (path == NULL || path[0] == '\0') {
@@ -59,45 +59,33 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
     mode[idx] = '\0';
 
     if (unveil(path, mode) != 0) {
-        if (err_msg != NULL) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "unveil(%.128s, %s) failed: %s", path, mode, strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "unveil(%.128s, %s) failed: %s", path, mode, strerror(errno));
         return SOLO_SANDBOX_ERROR;
     }
     return SOLO_SANDBOX_OK;
 }
 
-solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
+solo_sandbox_status_t solo_sandbox_lock(char *err_buf, size_t err_cap)
 {
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (unveil(NULL, NULL) != 0) {
-        if (err_msg != NULL) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "unveil(NULL, NULL) failed: %s", strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "unveil(NULL, NULL) failed: %s", strerror(errno));
         return SOLO_SANDBOX_ERROR;
     }
     return SOLO_SANDBOX_OK;
 }
 
-solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char **err_msg)
+solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char *err_buf, size_t err_cap)
 {
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (pledge(promises, NULL) != 0) {
-        if (err_msg != NULL) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "pledge(%.128s) failed: %s", promises ? promises : "", strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "pledge(%.128s) failed: %s", promises ? promises : "", strerror(errno));
         return SOLO_SANDBOX_ERROR;
     }
     return SOLO_SANDBOX_OK;

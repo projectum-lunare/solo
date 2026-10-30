@@ -74,7 +74,7 @@ describe("solo.serial (Physical Serial RS-232 Driver Signatures)", function()
         assert_eq(type(s.status), "table")
         assert_eq(s.status.OK, 0)
         assert_eq(s.status.ERROR, -1)
-        assert_eq(s.status.UNSUPPORTED, -2)
+        assert_eq(s.status.UNSUPPORTED, -4)
     end)
 
     -- 2. Table-based options constructor

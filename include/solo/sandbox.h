@@ -11,6 +11,7 @@
 #ifndef SOLO_SANDBOX_H
 #define SOLO_SANDBOX_H
 
+#include <solo/types.h>
 #include <stddef.h>
 
 /*
@@ -36,15 +37,6 @@ typedef enum {
 #define SOLO_SANDBOX_READ  SOLO_SANDBOX_PERM_READ
 #define SOLO_SANDBOX_WRITE SOLO_SANDBOX_PERM_WRITE
 #define SOLO_SANDBOX_EXEC  SOLO_SANDBOX_PERM_EXEC
-
-/*
- * Sandbox operation status codes.
- */
-typedef enum {
-    SOLO_SANDBOX_OK          =  0, /* Operation succeeded and restriction was applied */
-    SOLO_SANDBOX_ERROR       = -1, /* Operational error (e.g. invalid path, permission denied) */
-    SOLO_SANDBOX_UNSUPPORTED = -2  /* Sandbox or requested feature not supported on platform/kernel */
-} solo_sandbox_status_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,10 +68,9 @@ const char *solo_sandbox_backend_name(int *version_out);
  *
  * Returns SOLO_SANDBOX_OK on success,
  * SOLO_SANDBOX_UNSUPPORTED if sandboxing is not supported on this platform,
- * or SOLO_SANDBOX_ERROR on failure (with *err_msg dynamically allocated
- * if err_msg != NULL; the caller owns this string and must release it with free()).
+ * or SOLO_SANDBOX_ERROR on failure (writing error details to err_buf if non-NULL).
  */
-solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char **err_msg);
+solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char *err_buf, size_t err_cap);
 
 /*
  * Locks the sandbox, enforcing the restrictions on the current process.
@@ -87,19 +78,18 @@ solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, cha
  * opening any newly restricted filesystem paths.
  * Returns SOLO_SANDBOX_OK on success,
  * SOLO_SANDBOX_UNSUPPORTED if sandboxing is not supported on this platform,
- * or SOLO_SANDBOX_ERROR on failure (with *err_msg dynamically allocated
- * if err_msg != NULL; the caller owns this string and must release it with free()).
+ * or SOLO_SANDBOX_ERROR on failure (writing error details to err_buf if non-NULL).
  */
-solo_sandbox_status_t solo_sandbox_lock(char **err_msg);
+solo_sandbox_status_t solo_sandbox_lock(char *err_buf, size_t err_cap);
 
 /*
  * Pledges a set of system call promises (e.g. "stdio rpath wpath").
  * On platforms supporting pledge (OpenBSD), enforces the promises.
- * On unsupported platforms, returns SOLO_SANDBOX_UNSUPPORTED (-2) and populates
- * *err_msg dynamically (if err_msg != NULL; caller must release it with free()).
+ * On unsupported platforms, returns SOLO_SANDBOX_UNSUPPORTED (-4) and populates
+ * err_buf if provided.
  * Returns SOLO_SANDBOX_OK on success, or SOLO_SANDBOX_ERROR on failure.
  */
-solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char **err_msg);
+solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char *err_buf, size_t err_cap);
 
 #ifdef __cplusplus
 }

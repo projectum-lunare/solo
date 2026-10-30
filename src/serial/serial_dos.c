@@ -31,7 +31,7 @@ struct serial_port {
     char name[8];           /* "COM1", "COM2", etc. */
 };
 
-solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg)
+solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char *err_buf, size_t err_cap)
 {
     solo_serial_t *port;
     char dos_name[8];
@@ -54,8 +54,8 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
                                  : 0x3F8;
     sprintf(dos_name, "COM%u", bios_port + 1);
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (opts == NULL) {
@@ -145,8 +145,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     if (port == NULL) {
         if (fd >= 0)
             close(fd);
-        if (err_msg != NULL)
-            *err_msg = safe_strdup("Memory allocation failure for DOS serial port");
+        solo_set_err(err_buf, err_cap, "Memory allocation failure for DOS serial port");
         return NULL;
     }
 
@@ -203,12 +202,15 @@ solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t
     return SOLO_SERIAL_OK;
 }
 
-int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
+solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
     if (port == NULL || buf == NULL)
-        return -1;
+        return SOLO_ERROR;
     if (len == 0)
-        return 0;
+        return SOLO_OK;
 
     /* Primary: direct UART THR with timeout deadline */
     if (port->base_io != 0) {
@@ -228,13 +230,15 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
             if (has_timeout) {
                 while ((inp(port->base_io + 5) & 0x20) == 0) {
                     if ((clock() - start) >= wait_ticks) {
-                        return (int)i; /* 0 on timeout with 0 bytes, or partial count */
+                        if (written_bytes != NULL) *written_bytes = i;
+                        return (i > 0) ? SOLO_OK : SOLO_AGAIN;
                     }
                 }
             } else if (port->timeout_ms == 0) {
                 /* Non-blocking: check if transmitter ready */
                 if ((inp(port->base_io + 5) & 0x20) == 0) {
-                    return (int)i;
+                    if (written_bytes != NULL) *written_bytes = i;
+                    return (i > 0) ? SOLO_OK : SOLO_AGAIN;
                 }
             } else {
                 /* Blocking indefinitely */
@@ -244,23 +248,31 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
             }
             outp(port->base_io + 0, (unsigned char)buf[i]);
         }
-        return (int)len;
+        if (written_bytes != NULL) *written_bytes = len;
+        return SOLO_OK;
     }
 
     /* Fallback: write via DOS handle */
     if (port->fd >= 0) {
         int n = write(port->fd, buf, len);
-        return (n >= 0) ? n : -1;
+        if (n >= 0) {
+            if (written_bytes != NULL) *written_bytes = (size_t)n;
+            return SOLO_OK;
+        }
+        return SOLO_ERROR;
     }
 
-    return -1;
+    return SOLO_ERROR;
 }
 
-int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+solo_status_t solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, size_t *read_bytes, int timeout_ms)
 {
     int eff_timeout;
+    if (read_bytes != NULL) {
+        *read_bytes = 0;
+    }
     if (port == NULL || buf == NULL || max_len == 0)
-        return -1;
+        return SOLO_ERROR;
 
     eff_timeout = (timeout_ms >= 0) ? timeout_ms : port->timeout_ms;
 
@@ -271,12 +283,12 @@ int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout
             if (wait_ticks == 0) wait_ticks = 1;
             while ((inp(port->base_io + 5) & 0x01) == 0) {
                 if ((clock() - start) >= wait_ticks) {
-                    return 0; /* Timeout */
+                    return SOLO_AGAIN; /* Timeout */
                 }
             }
         } else if (eff_timeout == 0) {
             if ((inp(port->base_io + 5) & 0x01) == 0) {
-                return 0; /* Would block */
+                return SOLO_AGAIN; /* Would block */
             }
         } else {
             while ((inp(port->base_io + 5) & 0x01) == 0) {
@@ -284,14 +296,19 @@ int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout
             }
         }
         buf[0] = (char)inp(port->base_io + 0);
-        return 1;
+        if (read_bytes != NULL) *read_bytes = 1;
+        return SOLO_OK;
     }
 
     if (port->fd >= 0) {
         int n = read(port->fd, buf, max_len);
-        return (n >= 0) ? n : -1;
+        if (n >= 0) {
+            if (read_bytes != NULL) *read_bytes = (size_t)n;
+            return SOLO_OK;
+        }
+        return SOLO_ERROR;
     }
-    return -1;
+    return SOLO_ERROR;
 }
 
 solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)

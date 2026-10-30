@@ -97,24 +97,20 @@ static int test_lpt_present(uint16_t base)
     return 1;
 }
 
-solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
+solo_parallel_t *solo_parallel_open(const char *path, char *err_buf, size_t err_cap)
 {
     uint16_t base;
     solo_parallel_t *port;
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     base = parse_kolibri_lpt(path);
     if (base == 0) {
-        if (err_msg) {
-            char buf[256];
-            snprintf(buf, sizeof(buf),
-                     "Unknown KolibriOS parallel port '%s' (use LPT1..LPT3 or 0x378)",
-                     path ? path : "NULL");
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap,
+                         "Unknown KolibriOS parallel port '%s' (use LPT1..LPT3 or 0x378)",
+                         path ? path : "NULL");
         return NULL;
     }
 
@@ -123,20 +119,15 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
 
     if (!test_lpt_present(base)) {
         kolibri_free_io_port(base, 3);
-        if (err_msg) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "No parallel port hardware detected at I/O port 0x%03X",
-                     base);
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "No parallel port hardware detected at I/O port 0x%03X",
+                         base);
         return NULL;
     }
 
     port = (solo_parallel_t *)malloc(sizeof(solo_parallel_t));
     if (port == NULL) {
         kolibri_free_io_port(base, 3);
-        if (err_msg)
-            *err_msg = safe_strdup("Memory allocation failure");
+        solo_set_err(err_buf, err_cap, "Memory allocation failure");
         return NULL;
     }
 
@@ -149,14 +140,22 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     return port;
 }
 
-int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
+solo_status_t solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     size_t i;
     uint16_t base;
 
-    if (port == NULL || port->base == 0 || buf == NULL) {
-        return -1;
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
     }
+
+    if (port == NULL || port->base == 0 || buf == NULL) {
+        return SOLO_ERROR;
+    }
+    if (len == 0) {
+        return SOLO_OK;
+    }
+
     base = port->base;
 
     for (i = 0; i < len; i++) {
@@ -175,7 +174,8 @@ int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
             }
             kolibri_sleep(1);             /* Wait 10ms */
             if (++timeout_loops > 3000) { /* 30-second timeout */
-                return (i > 0) ? (int)i : -1;
+                if (written_bytes != NULL) *written_bytes = i;
+                return (i > 0) ? SOLO_OK : SOLO_ERROR;
             }
         }
 
@@ -188,15 +188,19 @@ int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
         outb(base + 2, 0x0C); /* Deassert STROBE */
     }
 
-    return (int)len;
+    if (written_bytes != NULL) {
+        *written_bytes = len;
+    }
+    return SOLO_OK;
 }
 
-int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+solo_status_t solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len, size_t *read_bytes)
 {
     (void)port;
     (void)buf;
     (void)max_len;
-    return -1;
+    if (read_bytes != NULL) *read_bytes = 0;
+    return SOLO_UNSUPPORTED;
 }
 
 solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)

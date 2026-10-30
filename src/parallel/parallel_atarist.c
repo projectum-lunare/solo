@@ -24,20 +24,18 @@ struct parallel_port {
     char name[16];
 };
 
-solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
+solo_parallel_t *solo_parallel_open(const char *path, char *err_buf, size_t err_cap)
 {
     solo_parallel_t *port;
     (void)path;
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     port = (solo_parallel_t *)malloc(sizeof(solo_parallel_t));
     if (port == NULL) {
-        if (err_msg != NULL) {
-            *err_msg = safe_strdup("Out of memory allocating parallel port handle");
-        }
+        solo_set_err(err_buf, err_cap, "Out of memory allocating parallel port handle");
         return NULL;
     }
 
@@ -48,15 +46,19 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     return port;
 }
 
-int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
+solo_status_t solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     size_t i;
 
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+
     if (port == NULL || buf == NULL) {
-        return -1;
+        return SOLO_ERROR;
     }
     if (len == 0) {
-        return 0;
+        return SOLO_OK;
     }
 
     for (i = 0; i < len; i++) {
@@ -69,22 +71,27 @@ int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
         long timeout = 2000000L;
         while (Bcostat(port->dev_id) == 0) {
             if (--timeout <= 0) {
-                return (i > 0) ? (int)i : -1;
+                if (written_bytes != NULL) *written_bytes = i;
+                return (i > 0) ? SOLO_OK : SOLO_ERROR;
             }
         }
 
         Bconout(port->dev_id, (unsigned char)buf[i]);
     }
 
-    return (int)len;
+    if (written_bytes != NULL) {
+        *written_bytes = len;
+    }
+    return SOLO_OK;
 }
 
-int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+solo_status_t solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len, size_t *read_bytes)
 {
     (void)port;
     (void)buf;
     (void)max_len;
-    return -1;
+    if (read_bytes != NULL) *read_bytes = 0;
+    return SOLO_UNSUPPORTED;
 }
 
 solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)

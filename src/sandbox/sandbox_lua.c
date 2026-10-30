@@ -54,10 +54,11 @@ static int parse_perms(const char *p)
 static int lsolo_sandbox_unveil(lua_State *L)
 {
     const char *path = luaL_checkstring(L, 1);
-    char *err_msg = NULL;
+    char err_buf[256];
     int perms;
     solo_sandbox_status_t res;
 
+    err_buf[0] = '\0';
     if (lua_isinteger(L, 2)) {
         perms = (int)lua_tointeger(L, 2);
     } else {
@@ -65,12 +66,11 @@ static int lsolo_sandbox_unveil(lua_State *L)
         perms = parse_perms(perms_str);
     }
 
-    res = solo_sandbox_unveil(path, perms, &err_msg);
+    res = solo_sandbox_unveil(path, perms, err_buf, sizeof(err_buf));
     if (res != SOLO_SANDBOX_OK) {
         lua_pushboolean(L, 0);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "sandbox unveil failed");
         }
@@ -83,13 +83,15 @@ static int lsolo_sandbox_unveil(lua_State *L)
 
 static int lsolo_sandbox_lock(lua_State *L)
 {
-    char *err_msg = NULL;
-    solo_sandbox_status_t res = solo_sandbox_lock(&err_msg);
+    char err_buf[256];
+    solo_sandbox_status_t res;
+
+    err_buf[0] = '\0';
+    res = solo_sandbox_lock(err_buf, sizeof(err_buf));
     if (res != SOLO_SANDBOX_OK) {
         lua_pushboolean(L, 0);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "sandbox lock failed");
         }
@@ -103,13 +105,15 @@ static int lsolo_sandbox_lock(lua_State *L)
 static int lsolo_sandbox_pledge(lua_State *L)
 {
     const char *promises = luaL_checkstring(L, 1);
-    char *err_msg = NULL;
-    solo_sandbox_status_t res = solo_sandbox_pledge(promises, &err_msg);
+    char err_buf[256];
+    solo_sandbox_status_t res;
+
+    err_buf[0] = '\0';
+    res = solo_sandbox_pledge(promises, err_buf, sizeof(err_buf));
     if (res != SOLO_SANDBOX_OK) {
         lua_pushboolean(L, 0);
-        if (err_msg != NULL) {
-            lua_pushstring(L, err_msg);
-            free(err_msg);
+        if (err_buf[0] != '\0') {
+            lua_pushstring(L, err_buf);
         } else {
             lua_pushstring(L, "sandbox pledge failed");
         }

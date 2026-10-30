@@ -55,7 +55,7 @@ static solo_serial_status_t solo_serial_apply_comm_timeouts(HANDLE handle, int t
     return SetCommTimeouts(handle, &to) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
-solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg)
+solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char *err_buf, size_t err_cap)
 {
     HANDLE h;
     solo_serial_t *port;
@@ -64,8 +64,8 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     char target_path[64];
     const char *p = (path && path[0] != '\0') ? path : "COM1";
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (opts == NULL) {
@@ -90,20 +90,15 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     h = CreateFileA(target_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 
     if (h == INVALID_HANDLE_VALUE) {
-        if (err_msg) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "CreateFileA(%s) failed (error %lu)", path,
-                     (unsigned long)GetLastError());
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "CreateFileA(%s) failed (error %lu)", path,
+                         (unsigned long)GetLastError());
         return NULL;
     }
 
     port = (solo_serial_t *)malloc(sizeof(solo_serial_t));
     if (port == NULL) {
         CloseHandle(h);
-        if (err_msg)
-            *err_msg = safe_strdup("Memory allocation failure");
+        solo_set_err(err_buf, err_cap, "Memory allocation failure");
         return NULL;
     }
     port->handle = h;
@@ -112,8 +107,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     memset(&port->orig_dcb, 0, sizeof(DCB));
     port->orig_dcb.DCBlength = sizeof(DCB);
     if (!GetCommState(h, &port->orig_dcb)) {
-        if (err_msg)
-            *err_msg = safe_strdup("GetCommState failed");
+        solo_set_err(err_buf, err_cap, "GetCommState failed");
         CloseHandle(h);
         free(port);
         return NULL;
@@ -164,12 +158,8 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     dcb.fDtrControl = (opts->dtr) ? DTR_CONTROL_ENABLE : DTR_CONTROL_DISABLE;
 
     if (!SetCommState(h, &dcb)) {
-        if (err_msg) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "SetCommState failed (error %lu)",
-                     (unsigned long)GetLastError());
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "SetCommState failed (error %lu)",
+                         (unsigned long)GetLastError());
         CloseHandle(h);
         free(port);
         return NULL;
@@ -205,19 +195,27 @@ solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t
     return EscapeCommFunction(port->handle, (state == SOLO_SERIAL_LINE_ON || (int)state == 1) ? SETDTR : CLRDTR) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
-int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
+solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     DWORD written = 0;
     size_t total = 0;
 
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+
     if (port == NULL || port->handle == INVALID_HANDLE_VALUE || buf == NULL) {
-        return -1;
+        return SOLO_ERROR;
+    }
+    if (len == 0) {
+        return SOLO_OK;
     }
 
     while (total < len) {
         DWORD chunk = (DWORD)(len - total);
         if (!WriteFile(port->handle, buf + total, chunk, &written, NULL)) {
-            return (total > 0) ? (int)total : -1;
+            if (written_bytes != NULL) *written_bytes = total;
+            return (total > 0) ? SOLO_OK : SOLO_ERROR;
         }
         if (written == 0) {
             break;
@@ -225,16 +223,23 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
         total += written;
     }
 
-    return (int)total;
+    if (written_bytes != NULL) {
+        *written_bytes = total;
+    }
+    return (total > 0 || len == 0) ? SOLO_OK : SOLO_AGAIN;
 }
 
-int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+solo_status_t solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, size_t *read_bytes, int timeout_ms)
 {
-    DWORD read_bytes = 0;
+    DWORD read_len = 0;
     int need_restore = 0;
 
+    if (read_bytes != NULL) {
+        *read_bytes = 0;
+    }
+
     if (port == NULL || port->handle == INVALID_HANDLE_VALUE || buf == NULL || max_len == 0) {
-        return -1;
+        return SOLO_ERROR;
     }
 
     if (timeout_ms >= 0 && timeout_ms != port->timeout_ms) {
@@ -243,18 +248,25 @@ int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout
         }
     }
 
-    if (!ReadFile(port->handle, buf, (DWORD)max_len, &read_bytes, NULL)) {
+    if (!ReadFile(port->handle, buf, (DWORD)max_len, &read_len, NULL)) {
         if (need_restore) {
             solo_serial_apply_comm_timeouts(port->handle, port->timeout_ms);
         }
-        return -1;
+        return SOLO_ERROR;
     }
 
     if (need_restore) {
         solo_serial_apply_comm_timeouts(port->handle, port->timeout_ms);
     }
 
-    return (int)read_bytes;
+    if (read_len == 0) {
+        return SOLO_AGAIN; /* Timeout */
+    }
+
+    if (read_bytes != NULL) {
+        *read_bytes = (size_t)read_len;
+    }
+    return SOLO_OK;
 }
 
 solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)

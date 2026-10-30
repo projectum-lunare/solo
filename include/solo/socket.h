@@ -12,6 +12,7 @@
 #define SOLO_SOCKET_H
 
 #include <stddef.h>
+#include <solo/types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,16 +40,6 @@ typedef enum solo_socket_mode {
 } solo_socket_mode_t;
 
 /*
- * Status and error codes
- */
-typedef enum solo_socket_status {
-    SOLO_SOCK_OK     =  0,
-    SOLO_SOCK_ERROR  = -1,
-    SOLO_SOCK_AGAIN  = -2,
-    SOLO_SOCK_CLOSED = -3
-} solo_socket_status_t;
-
-/*
  * Readiness polling events
  */
 typedef enum solo_socket_event {
@@ -63,40 +54,38 @@ typedef enum solo_socket_event {
  * networking engine, ensuring 100% API and semantic parity between modern
  * operating systems and vintage platforms (DOS WATT-32, OS/2, Amiga AmiTCP).
  *
- * Error Reporting & Dynamic Memory Ownership:
- * All socket functions accepting a `char **err_msg` argument will set `*err_msg = NULL`
- * upon entry if `err_msg` is non-NULL.
- * When an error occurs and `err_msg` is non-NULL, a null-terminated string describing
- * the failure is dynamically allocated.
- * The CALLER assumes ownership of this string and is responsible for freeing it
- * using free().
- * On successful execution, `*err_msg` remains NULL.
+ * Error Reporting & Zero Heap Allocation:
+ * Functions accepting `char *err_buf, size_t err_cap` will write descriptive error
+ * text into err_buf (if err_buf != NULL and err_cap > 0).
+ * No heap memory is allocated by the library for error messages.
+ * If err_buf is NULL or err_cap is 0, error text is omitted and functions report
+ * failures solely through status codes or NULL pointers.
  */
 
 /*
  * Lifecycle & Creation
- * On error, returns NULL and populates *err_msg (caller must free()).
+ * On error, returns NULL and populates err_buf if provided.
  */
-solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char **err_msg);
-solo_socket_t *solo_socket_tcp(solo_socket_mode_t mode, char **err_msg);
-solo_socket_t *solo_socket_udp(solo_socket_mode_t mode, char **err_msg);
+solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char *err_buf, size_t err_cap);
+solo_socket_t *solo_socket_tcp(solo_socket_mode_t mode, char *err_buf, size_t err_cap);
+solo_socket_t *solo_socket_udp(solo_socket_mode_t mode, char *err_buf, size_t err_cap);
 void solo_socket_close(solo_socket_t *sock);
 
 /*
  * Quick Setup (Connect & Bind)
- * On error, returns NULL and populates *err_msg (caller must free()).
+ * On error, returns NULL and populates err_buf if provided.
  */
-solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char **err_msg);
-solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_socket_mode_t mode, char **err_msg);
-solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode_t mode, char **err_msg);
+solo_socket_t *solo_socket_connect(const char *host, int port, solo_socket_mode_t mode, char *err_buf, size_t err_cap);
+solo_socket_t *solo_socket_bind(const char *host, int port, int backlog, solo_socket_mode_t mode, char *err_buf, size_t err_cap);
+solo_socket_t *solo_socket_udp_bind(const char *host, int port, solo_socket_mode_t mode, char *err_buf, size_t err_cap);
 
 /*
  * Operations on existing socket
- * On error, returns SOLO_SOCK_ERROR (or NULL for accept) and populates *err_msg (caller must free()).
+ * On error, returns SOLO_SOCK_ERROR (or NULL for accept) and populates err_buf if provided.
  */
-solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg);
-solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg);
-solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t ip_len, int *client_port, char **err_msg);
+solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char *err_buf, size_t err_cap);
+solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char *err_buf, size_t err_cap);
+solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t ip_len, int *client_port, char *err_buf, size_t err_cap);
 
 /*
  * Stream & Connected Datagram I/O
@@ -121,7 +110,7 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
 
 /*
  * Mode, Timeout & Polling
- * On error, functions accepting err_msg return SOLO_SOCK_ERROR and populate *err_msg (caller must free()).
+ * On error, functions accepting err_buf return SOLO_SOCK_ERROR and populate err_buf if provided.
  */
 typedef struct solo_pollfd {
     solo_socket_t *sock;
@@ -129,10 +118,10 @@ typedef struct solo_pollfd {
     int revents;     /* Output: SOLO_SOCK_POLL_READ | SOLO_SOCK_POLL_WRITE | SOLO_SOCK_POLL_ERR */
 } solo_pollfd_t;
 
-solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg);
+solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char *err_buf, size_t err_cap);
 solo_socket_mode_t solo_socket_get_mode(const solo_socket_t *sock);
 solo_socket_type_t solo_socket_get_type(const solo_socket_t *sock);
-solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg);
+solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char *err_buf, size_t err_cap);
 int solo_socket_wait(solo_socket_t *sock, int events, int timeout_ms);
 int solo_socket_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms);
 int solo_socket_get_fd(const solo_socket_t *sock);

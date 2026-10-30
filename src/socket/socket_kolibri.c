@@ -165,23 +165,27 @@ static void sys_sleep_ticks(int ticks)
     __asm__ __volatile__("int $0x40" :: "a"(5), "b"(ticks) : "memory");
 }
 
-solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char **err_msg)
+solo_socket_t *solo_socket_create(solo_socket_type_t type, solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
     int stype = (type == SOLO_SOCK_UDP) ? KOLIBRI_SOCK_DGRAM : KOLIBRI_SOCK_STREAM;
     int proto = (type == SOLO_SOCK_UDP) ? KOLIBRI_IPPROTO_UDP : KOLIBRI_IPPROTO_TCP;
     int handle;
     solo_socket_t *sock;
 
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     handle = sys_socket_open(KOLIBRI_AF_INET4, stype, proto);
     if (handle < 0) {
-        solo_socket_set_err(err_msg, "KolibriOS: failed to create socket (network stack running?)");
+        solo_set_err(err_buf, err_cap, "KolibriOS: failed to create socket (network stack running?)");
         return NULL;
     }
 
     sock = (solo_socket_t *)malloc(sizeof(solo_socket_t));
     if (sock == NULL) {
         sys_socket_close(handle);
-        solo_socket_set_err(err_msg, "out of memory");
+        solo_set_err(err_buf, err_cap, "out of memory");
         return NULL;
     }
 
@@ -200,19 +204,23 @@ void solo_socket_backend_close(solo_socket_t *sock)
     }
 }
 
-solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char **err_msg)
+solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host, int port, int backlog, char *err_buf, size_t err_cap)
 {
     unsigned long ip;
     struct kolibri_sockaddr_in addr;
     int rc;
 
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     if (!SOLO_SOCK_IS_VALID(sock)) {
-        solo_socket_set_err(err_msg, "invalid socket handle");
+        solo_set_err(err_buf, err_cap, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
 
     if (!solo_socket_parse_ipv4(solo_socket_normalize_bind_host(host), &ip)) {
-        solo_socket_set_err(err_msg, "KolibriOS: invalid bind address");
+        solo_set_err(err_buf, err_cap, "KolibriOS: invalid bind address");
         return SOLO_SOCK_ERROR;
     }
 
@@ -223,14 +231,14 @@ solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host
 
     rc = sys_socket_bind(sock->fd, &addr, sizeof(addr));
     if (rc != 0) {
-        solo_socket_set_err(err_msg, "KolibriOS: failed to bind socket");
+        solo_set_err(err_buf, err_cap, "KolibriOS: failed to bind socket");
         return SOLO_SOCK_ERROR;
     }
 
     if (sock->type == SOLO_SOCK_TCP) {
         rc = sys_socket_listen(sock->fd, backlog > 0 ? backlog : 5);
         if (rc != 0) {
-            solo_socket_set_err(err_msg, "KolibriOS: failed to listen on socket");
+            solo_set_err(err_buf, err_cap, "KolibriOS: failed to listen on socket");
             return SOLO_SOCK_ERROR;
         }
     }
@@ -238,19 +246,23 @@ solo_socket_status_t solo_socket_bind_sock(solo_socket_t *sock, const char *host
     return SOLO_SOCK_OK;
 }
 
-solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char **err_msg)
+solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *host, int port, char *err_buf, size_t err_cap)
 {
     unsigned long ip;
     struct kolibri_sockaddr_in addr;
     int rc;
 
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     if (!SOLO_SOCK_IS_VALID(sock)) {
-        solo_socket_set_err(err_msg, "invalid socket handle");
+        solo_set_err(err_buf, err_cap, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
 
     if (!solo_socket_parse_ipv4(solo_socket_normalize_connect_host(host), &ip)) {
-        solo_socket_set_err(err_msg, "KolibriOS: invalid IPv4 address format");
+        solo_set_err(err_buf, err_cap, "KolibriOS: invalid IPv4 address format");
         return SOLO_SOCK_ERROR;
     }
 
@@ -264,7 +276,7 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
         if (sock->mode == SOLO_SOCK_NONBLOCKING && (rc == -11 || rc == -1)) {
             return SOLO_SOCK_AGAIN;
         }
-        solo_socket_set_err(err_msg, "KolibriOS: failed to connect to remote host");
+        solo_set_err(err_buf, err_cap, "KolibriOS: failed to connect to remote host");
         return SOLO_SOCK_ERROR;
     }
 
@@ -272,15 +284,19 @@ solo_socket_status_t solo_socket_connect_sock(solo_socket_t *sock, const char *h
 }
 
 solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t ip_len,
-                                  int *client_port, char **err_msg)
+                                  int *client_port, char *err_buf, size_t err_cap)
 {
     struct kolibri_sockaddr_in client_addr;
     int addr_len = sizeof(client_addr);
     int client_handle;
     solo_socket_t *sock;
 
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     if (!SOLO_SOCK_IS_VALID(server)) {
-        solo_socket_set_err(err_msg, "invalid server socket");
+        solo_set_err(err_buf, err_cap, "invalid server socket");
         return NULL;
     }
 
@@ -288,12 +304,12 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     client_handle = sys_socket_accept(server->fd, &client_addr, &addr_len);
     if (client_handle < 0) {
         if (server->mode == SOLO_SOCK_NONBLOCKING && (client_handle == -11 || client_handle == -1)) {
-            if (err_msg != NULL) {
-                *err_msg = safe_strdup("resource temporarily unavailable");
+            if (err_buf != NULL && err_cap > 0) {
+                err_buf[0] = '\0';
             }
             return NULL;
         }
-        solo_socket_set_err(err_msg, "KolibriOS: accept failed");
+        solo_set_err(err_buf, err_cap, "KolibriOS: accept failed");
         return NULL;
     }
 
@@ -311,7 +327,7 @@ solo_socket_t *solo_socket_accept(solo_socket_t *server, char *client_ip, size_t
     sock = (solo_socket_t *)malloc(sizeof(solo_socket_t));
     if (sock == NULL) {
         sys_socket_close(client_handle);
-        solo_socket_set_err(err_msg, "out of memory");
+        solo_set_err(err_buf, err_cap, "out of memory");
         return NULL;
     }
 
@@ -423,10 +439,14 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
     return status;
 }
 
-solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char *err_buf, size_t err_cap)
 {
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     if (!SOLO_SOCK_IS_VALID(sock)) {
-        solo_socket_set_err(err_msg, "invalid socket handle");
+        solo_set_err(err_buf, err_cap, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
 
@@ -434,10 +454,14 @@ solo_socket_status_t solo_socket_backend_set_mode(solo_socket_t *sock, solo_sock
     return SOLO_SOCK_OK;
 }
 
-solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char **err_msg)
+solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int timeout_ms, char *err_buf, size_t err_cap)
 {
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
+    }
+
     if (!SOLO_SOCK_IS_VALID(sock)) {
-        solo_socket_set_err(err_msg, "invalid socket handle");
+        solo_set_err(err_buf, err_cap, "invalid socket handle");
         return SOLO_SOCK_ERROR;
     }
 

@@ -27,7 +27,7 @@ struct serial_port {
     int ctl_fd;
 };
 
-solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg)
+solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char *err_buf, size_t err_cap)
 {
     char data_path[128];
     char ctl_path[128];
@@ -40,8 +40,8 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     int baud, bits, stop;
     const char *target = (path && path[0] != '\0') ? path : "/dev/eia0";
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (opts == NULL) {
@@ -55,9 +55,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
         default_opts.timeout_ms = -1; /* default: blocking indefinitely */
         opts = &default_opts;
     } else if (opts->timeout_ms >= 0) {
-        if (err_msg) {
-            *err_msg = safe_strdup("Timed/non-blocking serial I/O is unsupported on Plan 9");
-        }
+        solo_set_err(err_buf, err_cap, "Timed/non-blocking serial I/O is unsupported on Plan 9");
         return NULL;
     }
 
@@ -82,12 +80,8 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     }
 
     if (ctl_fd < 0) {
-        if (err_msg) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "Cannot open Plan 9 serial control file '%s' (%s)", ctl_path,
-                     strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "Cannot open Plan 9 serial control file '%s' (%s)", ctl_path,
+                         strerror(errno));
         return NULL;
     }
 
@@ -144,12 +138,8 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     /* Open serial data file */
     data_fd = open(data_path, O_RDWR);
     if (data_fd < 0) {
-        if (err_msg) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "Cannot open Plan 9 serial data file '%s' (%s)", data_path,
-                     strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "Cannot open Plan 9 serial data file '%s' (%s)", data_path,
+                         strerror(errno));
         close(ctl_fd);
         return NULL;
     }
@@ -158,8 +148,7 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     if (port == NULL) {
         close(data_fd);
         close(ctl_fd);
-        if (err_msg)
-            *err_msg = safe_strdup("Memory allocation failure");
+        solo_set_err(err_buf, err_cap, "Memory allocation failure");
         return NULL;
     }
 
@@ -187,19 +176,27 @@ solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t
     return (write(port->ctl_fd, on ? "d1\n" : "d0\n", 3) == 3) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
-int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
+solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     ssize_t written;
     size_t total = 0;
 
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+
     if (port == NULL || port->data_fd < 0 || buf == NULL) {
-        return -1;
+        return SOLO_ERROR;
+    }
+    if (len == 0) {
+        return SOLO_OK;
     }
 
     while (total < len) {
         written = write(port->data_fd, buf + total, len - total);
         if (written < 0) {
-            return (total > 0) ? (int)total : -1;
+            if (written_bytes != NULL) *written_bytes = total;
+            return (total > 0) ? SOLO_OK : SOLO_ERROR;
         }
         if (written == 0) {
             break;
@@ -207,19 +204,40 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
         total += (size_t)written;
     }
 
-    return (int)total;
+    if (written_bytes != NULL) {
+        *written_bytes = total;
+    }
+    return SOLO_OK;
 }
 
-int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+solo_status_t solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, size_t *read_bytes, int timeout_ms)
 {
+    ssize_t n;
+
+    if (read_bytes != NULL) {
+        *read_bytes = 0;
+    }
+
     if (port == NULL || port->data_fd < 0 || buf == NULL || max_len == 0) {
-        return -1;
+        return SOLO_ERROR;
     }
     if (timeout_ms >= 0) {
         /* Plan 9 uart(3) does not support timed or non-blocking read */
-        return SOLO_SERIAL_UNSUPPORTED;
+        return SOLO_UNSUPPORTED;
     }
-    return (int)read(port->data_fd, buf, max_len);
+
+    n = read(port->data_fd, buf, max_len);
+    if (n < 0) {
+        return SOLO_ERROR;
+    }
+    if (n == 0) {
+        return SOLO_EOF;
+    }
+
+    if (read_bytes != NULL) {
+        *read_bytes = (size_t)n;
+    }
+    return SOLO_OK;
 }
 
 solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)

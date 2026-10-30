@@ -35,7 +35,7 @@ describe("solo.parallel (Physical Parallel IEEE 1284 Driver Signatures)", functi
         assert_eq(type(p.status), "table")
         assert_eq(p.status.OK, 0)
         assert_eq(p.status.ERROR, -1)
-        assert_eq(p.status.UNSUPPORTED, -2)
+        assert_eq(p.status.UNSUPPORTED, -4)
 
         -- IEEE 1284 / SPP operating modes
         assert_eq(type(p.mode), "table")

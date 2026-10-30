@@ -12,21 +12,13 @@
 #define SOLO_SERIAL_H
 
 #include <stddef.h>
+#include <solo/types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct serial_port solo_serial_t;
-
-/*
- * Serial operation status codes.
- */
-typedef enum {
-    SOLO_SERIAL_OK          =  0,
-    SOLO_SERIAL_ERROR       = -1,
-    SOLO_SERIAL_UNSUPPORTED = -2
-} solo_serial_status_t;
 
 /*
  * Serial flow control modes.
@@ -106,35 +98,35 @@ typedef struct {
  * Default flow control is SOLO_SERIAL_FLOW_NONE (0).
  * Default timeout is -1 (blocking indefinitely).
  * Hardware flow control (RTS/CTS) is only activated when explicitly requested.
- * On failure, returns NULL and populates *err_msg with a dynamically
- * allocated string (if err_msg != NULL). The caller owns the string and
- * must release it with free().
+ * On failure, returns NULL and writes descriptive error text into err_buf (if non-NULL).
+ * Does not allocate dynamic heap memory for error strings.
  */
-solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg);
+solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char *err_buf, size_t err_cap);
 
 /*
  * Writes data to the serial port.
  * Returns:
- *   > 0 : number of bytes written (full or partial).
- *     0 : timeout expired before any bytes could be accepted (or len == 0).
- *    -1 : I/O error.
+ *   SOLO_OK          : all requested bytes written, or partial bytes written before timeout.
+ *   SOLO_AGAIN       : timeout expired before any bytes could be accepted.
+ *   SOLO_ERROR       : fatal I/O or descriptor error.
+ * If written_bytes != NULL, stores the count of bytes successfully accepted.
  */
-int solo_serial_write(solo_serial_t *port, const char *buf, size_t len);
+solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len, size_t *written_bytes);
 
 /*
  * Reads data from the serial port.
  * Returns:
- *   > 0 : number of bytes read.
- *     0 : timeout expired before any bytes became available (or would block).
- *    -1 : I/O error.
- *    -2 : SOLO_SERIAL_UNSUPPORTED (if timed read is not supported on this platform).
+ *   SOLO_OK          : one or more bytes read into buf (*read_bytes populated).
+ *   SOLO_AGAIN       : timeout expired before any bytes became available.
+ *   SOLO_ERROR       : fatal I/O error or descriptor invalid.
+ *   SOLO_UNSUPPORTED : timed read not supported on platform.
  *
  * If timeout_ms < 0, uses the port's configured timeout (from opts or solo_serial_set_timeout).
  * If the effective timeout is < 0, blocks indefinitely until at least one byte is available.
  * If the effective timeout is 0, performs a non-blocking check.
  * If the effective timeout is > 0, waits up to timeout_ms milliseconds.
  */
-int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms);
+solo_status_t solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, size_t *read_bytes, int timeout_ms);
 
 /*
  * Configures the default I/O timeout in milliseconds for the serial port.

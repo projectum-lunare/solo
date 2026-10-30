@@ -129,7 +129,7 @@ static int test_uart_present(uint16_t base)
     return 0;
 }
 
-solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char **err_msg)
+solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts, char *err_buf, size_t err_cap)
 {
     uint16_t base;
     solo_serial_t *port;
@@ -139,8 +139,8 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     uint8_t mcr = 0;
     int baud;
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     if (opts == NULL) {
@@ -156,19 +156,14 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     }
 
     if (path == NULL) {
-        if (err_msg)
-            *err_msg = safe_strdup("Device path cannot be NULL");
+        solo_set_err(err_buf, err_cap, "Device path cannot be NULL");
         return NULL;
     }
 
     base = parse_kolibri_port(path);
     if (base == 0) {
-        if (err_msg) {
-            char buf[256];
-            snprintf(buf, sizeof(buf),
-                     "Unknown KolibriOS serial port '%s' (use COM1..COM4 or 0x3F8)", path);
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap,
+                         "Unknown KolibriOS serial port '%s' (use COM1..COM4 or 0x3F8)", path);
         return NULL;
     }
 
@@ -178,20 +173,15 @@ solo_serial_t *solo_serial_open(const char *path, const solo_serial_opts_t *opts
     /* Verify that UART hardware exists at this address */
     if (!test_uart_present(base)) {
         kolibri_free_io_port(base, 8);
-        if (err_msg) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "No UART hardware detected at I/O port 0x%03X (%s)", base,
-                     path);
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "No UART hardware detected at I/O port 0x%03X (%s)", base,
+                         path);
         return NULL;
     }
 
     port = (solo_serial_t *)malloc(sizeof(solo_serial_t));
     if (port == NULL) {
         kolibri_free_io_port(base, 8);
-        if (err_msg)
-            *err_msg = safe_strdup("Memory allocation failure");
+        solo_set_err(err_buf, err_cap, "Memory allocation failure");
         return NULL;
     }
 
@@ -289,16 +279,20 @@ solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t
     return SOLO_SERIAL_OK;
 }
 
-int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
+solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     size_t i;
     uint16_t base;
     int elapsed = 0;
 
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+
     if (port == NULL || port->base == 0 || buf == NULL)
-        return -1;
+        return SOLO_ERROR;
     if (len == 0)
-        return 0;
+        return SOLO_OK;
 
     base = port->base;
 
@@ -313,10 +307,12 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
                     kolibri_sleep(1); /* 10ms */
                     elapsed += 10;
                     if (elapsed >= port->timeout_ms) {
-                        return (int)i;
+                        if (written_bytes != NULL) *written_bytes = i;
+                        return (i > 0) ? SOLO_OK : SOLO_AGAIN;
                     }
                 } else if (port->timeout_ms == 0) {
-                    return (int)i;
+                    if (written_bytes != NULL) *written_bytes = i;
+                    return (i > 0) ? SOLO_OK : SOLO_AGAIN;
                 } else {
                     kolibri_sleep(0);
                 }
@@ -329,10 +325,12 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
                 kolibri_sleep(1); /* 10ms */
                 elapsed += 10;
                 if (elapsed >= port->timeout_ms) {
-                    return (int)i;
+                    if (written_bytes != NULL) *written_bytes = i;
+                    return (i > 0) ? SOLO_OK : SOLO_AGAIN;
                 }
             } else if (port->timeout_ms == 0) {
-                return (int)i;
+                if (written_bytes != NULL) *written_bytes = i;
+                return (i > 0) ? SOLO_OK : SOLO_AGAIN;
             } else {
                 kolibri_sleep(0); /* Yield */
             }
@@ -342,14 +340,22 @@ int solo_serial_write(solo_serial_t *port, const char *buf, size_t len)
         outb(base + 0, (uint8_t)buf[i]);
     }
 
-    return (int)len;
+    if (written_bytes != NULL) {
+        *written_bytes = len;
+    }
+    return SOLO_OK;
 }
 
-int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout_ms)
+solo_status_t solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, size_t *read_bytes, int timeout_ms)
 {
     int eff_timeout;
+
+    if (read_bytes != NULL) {
+        *read_bytes = 0;
+    }
+
     if (port == NULL || port->base == 0 || buf == NULL || max_len == 0)
-        return -1;
+        return SOLO_ERROR;
 
     eff_timeout = (timeout_ms >= 0) ? timeout_ms : port->timeout_ms;
 
@@ -359,12 +365,12 @@ int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout
             kolibri_sleep(1); /* 10ms */
             elapsed += 10;
             if (elapsed >= eff_timeout) {
-                return 0; /* Timeout */
+                return SOLO_AGAIN; /* Timeout */
             }
         }
     } else if (eff_timeout == 0) {
         if ((inb(port->base + 5) & 0x01) == 0) {
-            return 0; /* Would block */
+            return SOLO_AGAIN; /* Would block */
         }
     } else {
         while ((inb(port->base + 5) & 0x01) == 0) {
@@ -373,7 +379,10 @@ int solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, int timeout
     }
 
     buf[0] = (char)inb(port->base + 0);
-    return 1;
+    if (read_bytes != NULL) {
+        *read_bytes = 1;
+    }
+    return SOLO_OK;
 }
 
 solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms)

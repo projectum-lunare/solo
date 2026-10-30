@@ -21,29 +21,29 @@ struct parallel_port {
     int dummy;
 };
 
-solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
+solo_parallel_t *solo_parallel_open(const char *path, char *err_buf, size_t err_cap)
 {
     (void)path;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("Parallel ports are not supported on this platform");
-    }
+    solo_set_err(err_buf, err_cap, "Parallel ports are not supported on this platform");
     return NULL;
 }
 
-int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
+solo_status_t solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     (void)port;
     (void)buf;
     (void)len;
-    return -1;
+    if (written_bytes != NULL) *written_bytes = 0;
+    return SOLO_UNSUPPORTED;
 }
 
-int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+solo_status_t solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len, size_t *read_bytes)
 {
     (void)port;
     (void)buf;
     (void)max_len;
-    return -1;
+    if (read_bytes != NULL) *read_bytes = 0;
+    return SOLO_UNSUPPORTED;
 }
 
 solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)

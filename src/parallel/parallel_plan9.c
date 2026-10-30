@@ -26,14 +26,14 @@ struct parallel_port {
     int fd;
 };
 
-solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
+solo_parallel_t *solo_parallel_open(const char *path, char *err_buf, size_t err_cap)
 {
     const char *target_path = (path && path[0] != '\0') ? path : "/dev/lpt";
     int fd;
     solo_parallel_t *port;
 
-    if (err_msg != NULL) {
-        *err_msg = NULL;
+    if (err_buf != NULL && err_cap > 0) {
+        err_buf[0] = '\0';
     }
 
     fd = open(target_path, O_WRONLY);
@@ -48,20 +48,15 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     }
 
     if (fd < 0) {
-        if (err_msg) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "Cannot open Plan 9 parallel device '%s' (%s)", target_path,
-                     strerror(errno));
-            *err_msg = safe_strdup(buf);
-        }
+        solo_set_err_fmt(err_buf, err_cap, "Cannot open Plan 9 parallel device '%s' (%s)", target_path,
+                         strerror(errno));
         return NULL;
     }
 
     port = (solo_parallel_t *)malloc(sizeof(solo_parallel_t));
     if (port == NULL) {
         close(fd);
-        if (err_msg)
-            *err_msg = safe_strdup("Memory allocation failure");
+        solo_set_err(err_buf, err_cap, "Memory allocation failure");
         return NULL;
     }
 
@@ -69,19 +64,27 @@ solo_parallel_t *solo_parallel_open(const char *path, char **err_msg)
     return port;
 }
 
-int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
+solo_status_t solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     ssize_t written;
     size_t total = 0;
 
+    if (written_bytes != NULL) {
+        *written_bytes = 0;
+    }
+
     if (port == NULL || port->fd < 0 || buf == NULL) {
-        return -1;
+        return SOLO_ERROR;
+    }
+    if (len == 0) {
+        return SOLO_OK;
     }
 
     while (total < len) {
         written = write(port->fd, buf + total, len - total);
         if (written < 0) {
-            return (total > 0) ? (int)total : -1;
+            if (written_bytes != NULL) *written_bytes = total;
+            return (total > 0) ? SOLO_OK : SOLO_ERROR;
         }
         if (written == 0) {
             break;
@@ -89,15 +92,19 @@ int solo_parallel_write(solo_parallel_t *port, const char *buf, size_t len)
         total += (size_t)written;
     }
 
-    return (int)total;
+    if (written_bytes != NULL) {
+        *written_bytes = total;
+    }
+    return SOLO_OK;
 }
 
-int solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len)
+solo_status_t solo_parallel_read(solo_parallel_t *port, char *buf, size_t max_len, size_t *read_bytes)
 {
     (void)port;
     (void)buf;
     (void)max_len;
-    return -1;
+    if (read_bytes != NULL) *read_bytes = 0;
+    return SOLO_UNSUPPORTED;
 }
 
 solo_parallel_status_t solo_parallel_get_status(solo_parallel_t *port, int *pins_out)

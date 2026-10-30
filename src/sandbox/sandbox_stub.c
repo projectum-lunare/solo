@@ -25,29 +25,23 @@ const char *solo_sandbox_backend_name(int *version_out)
     return "none";
 }
 
-solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char **err_msg)
+solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char *err_buf, size_t err_cap)
 {
     (void)path;
     (void)permissions;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("sandboxing is not supported on this platform");
-    }
+    solo_set_err(err_buf, err_cap, "sandboxing is not supported on this platform");
     return SOLO_SANDBOX_UNSUPPORTED;
 }
 
-solo_sandbox_status_t solo_sandbox_lock(char **err_msg)
+solo_sandbox_status_t solo_sandbox_lock(char *err_buf, size_t err_cap)
 {
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("sandboxing is not supported on this platform");
-    }
+    solo_set_err(err_buf, err_cap, "sandboxing is not supported on this platform");
     return SOLO_SANDBOX_UNSUPPORTED;
 }
 
-solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char **err_msg)
+solo_sandbox_status_t solo_sandbox_pledge(const char *promises, char *err_buf, size_t err_cap)
 {
     (void)promises;
-    if (err_msg != NULL) {
-        *err_msg = safe_strdup("sandboxing is not supported on this platform");
-    }
+    solo_set_err(err_buf, err_cap, "sandboxing is not supported on this platform");
     return SOLO_SANDBOX_UNSUPPORTED;
 }

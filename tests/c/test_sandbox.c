@@ -64,7 +64,7 @@ TEST test_sandbox_enums(void)
     /* Status return codes */
     ASSERT_EQ(0, SOLO_SANDBOX_OK);
     ASSERT_EQ(-1, SOLO_SANDBOX_ERROR);
-    ASSERT_EQ(-2, SOLO_SANDBOX_UNSUPPORTED);
+    ASSERT_EQ(-4, SOLO_SANDBOX_UNSUPPORTED);
 
     PASS();
 }
@@ -76,24 +76,21 @@ TEST test_sandbox_enums(void)
  */
 TEST test_sandbox_unsupported(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     solo_sandbox_status_t rc;
 
 #if SOLO_IS_LINUX
     /* On Linux, Landlock does not support OpenBSD pledge(); must fail visibly with error message */
-    rc = solo_sandbox_pledge("stdio", &err_msg);
+    err_buf[0] = '\0';
+    rc = solo_sandbox_pledge("stdio", err_buf, sizeof(err_buf));
     ASSERT_EQ(SOLO_SANDBOX_UNSUPPORTED, rc);
-    ASSERT(err_msg != NULL);
-    ASSERT(strlen(err_msg) > 0);
-    free(err_msg);
-    err_msg = NULL;
+    ASSERT(strlen(err_buf) > 0);
 #elif !SOLO_IS_OPENBSD
     /* On stubs or non-OpenBSD, pledge must fail visibly with SOLO_SANDBOX_UNSUPPORTED */
-    rc = solo_sandbox_pledge("stdio", &err_msg);
+    err_buf[0] = '\0';
+    rc = solo_sandbox_pledge("stdio", err_buf, sizeof(err_buf));
     ASSERT_EQ(SOLO_SANDBOX_UNSUPPORTED, rc);
-    ASSERT(err_msg != NULL);
-    free(err_msg);
-    err_msg = NULL;
+    ASSERT(strlen(err_buf) > 0);
 #endif
 
     PASS();
@@ -124,21 +121,21 @@ TEST test_sandbox_fork(void)
 
         if (pid == 0) {
             /* --- CHILD PROCESS --- */
-            char *err = NULL;
+            char err_buf[128];
             FILE *f;
             solo_sandbox_status_t rc;
 
             /* Unveil current working directory for read access */
-            rc = solo_sandbox_unveil(".", SOLO_SANDBOX_PERM_READ, &err);
+            err_buf[0] = '\0';
+            rc = solo_sandbox_unveil(".", SOLO_SANDBOX_PERM_READ, err_buf, sizeof(err_buf));
             if (rc != SOLO_SANDBOX_OK) {
-                if (err) free(err);
                 _exit(1);
             }
 
             /* Irrevocably lock the sandbox ruleset */
-            rc = solo_sandbox_lock(&err);
+            err_buf[0] = '\0';
+            rc = solo_sandbox_lock(err_buf, sizeof(err_buf));
             if (rc != SOLO_SANDBOX_OK) {
-                if (err) free(err);
                 _exit(2);
             }
 
@@ -193,14 +190,14 @@ TEST test_sandbox_lock_without_unveil_fork(void)
 
         if (pid == 0) {
             /* --- CHILD PROCESS --- */
-            char *err = NULL;
+            char err_buf[128];
             FILE *f;
             solo_sandbox_status_t rc;
 
             /* Lock immediately without granting any path permissions */
-            rc = solo_sandbox_lock(&err);
+            err_buf[0] = '\0';
+            rc = solo_sandbox_lock(err_buf, sizeof(err_buf));
             if (rc != SOLO_SANDBOX_OK) {
-                if (err) free(err);
                 _exit(1);
             }
 

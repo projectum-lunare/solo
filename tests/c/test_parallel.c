@@ -24,7 +24,7 @@ TEST test_parallel_enums(void)
     /* Status return codes */
     ASSERT_EQ(0, SOLO_PARALLEL_OK);
     ASSERT_EQ(-1, SOLO_PARALLEL_ERROR);
-    ASSERT_EQ(-2, SOLO_PARALLEL_UNSUPPORTED);
+    ASSERT_EQ(-4, SOLO_PARALLEL_UNSUPPORTED);
 
     /* Port operating modes (SPP standard unidirectional, and IEEE 1284 bidirectional modes) */
     ASSERT_EQ(0, SOLO_PARALLEL_MODE_SPP);
@@ -45,27 +45,27 @@ TEST test_parallel_enums(void)
 
 /*
  * Validates error reporting and NULL handle safety during basic parallel operations:
- * - Calling read, get_status, or set_mode with NULL returns SOLO_PARALLEL_ERROR.
+ * - Calling read, get_status, or set_mode with NULL returns SOLO_PARALLEL_ERROR / SOLO_ERROR.
  * - Opening a nonexistent device node path fails gracefully with NULL and error message.
  */
 TEST test_parallel_operations(void)
 {
-    char *err_msg = NULL;
+    char err_buf[128];
     char buf[32];
     int status = 0;
+    size_t io_bytes = 0;
     solo_parallel_t *p = NULL;
 
     /* Operations on NULL handle must fail safely */
-    ASSERT_EQ(SOLO_PARALLEL_ERROR, solo_parallel_read(NULL, buf, sizeof(buf)));
+    ASSERT_EQ(SOLO_ERROR, solo_parallel_read(NULL, buf, sizeof(buf), &io_bytes));
     ASSERT_EQ(SOLO_PARALLEL_ERROR, solo_parallel_get_status(NULL, &status));
     ASSERT_EQ(SOLO_PARALLEL_ERROR, solo_parallel_set_mode(NULL, SOLO_PARALLEL_MODE_BYTE));
 
     /* Opening a nonexistent device path must fail with NULL and provide error text */
-    p = solo_parallel_open("/dev/nonexistent_solo_parallel_node", &err_msg);
+    err_buf[0] = '\0';
+    p = solo_parallel_open("/dev/nonexistent_solo_parallel_node", err_buf, sizeof(err_buf));
     ASSERT_EQ(NULL, p);
-    ASSERT(err_msg != NULL);
-    free(err_msg);
-    err_msg = NULL;
+    ASSERT(strlen(err_buf) > 0);
 
     PASS();
 }
@@ -73,32 +73,32 @@ TEST test_parallel_operations(void)
 /*
  * Exhaustive defensive safety test:
  * Verifies that all parallel port operations (close, write, read, get_status,
- * drain, set_mode) handle NULL handles without crashing, and that memory allocated
- * for error messages is properly tracked and freed.
+ * drain, set_mode) handle NULL handles without crashing, and that error buffers
+ * are populated on failure.
  */
 TEST test_parallel_exhaustive(void)
 {
     char buf[16];
-    char *err_msg = NULL;
+    char err_buf[128];
     int status = 0;
+    size_t io_bytes = 0;
     solo_parallel_t *p = NULL;
 
     /* Safe no-op on closing NULL */
     solo_parallel_close(NULL);
 
     /* Safe failure on write/read/drain/status/mode with NULL */
-    ASSERT_EQ(-1, solo_parallel_write(NULL, buf, sizeof(buf)));
-    ASSERT_EQ(SOLO_PARALLEL_ERROR, solo_parallel_read(NULL, buf, sizeof(buf)));
+    ASSERT_EQ(SOLO_ERROR, solo_parallel_write(NULL, buf, sizeof(buf), &io_bytes));
+    ASSERT_EQ(SOLO_ERROR, solo_parallel_read(NULL, buf, sizeof(buf), &io_bytes));
     ASSERT_EQ(SOLO_PARALLEL_ERROR, solo_parallel_get_status(NULL, &status));
     ASSERT_EQ(-1, solo_parallel_drain(NULL));
     ASSERT_EQ(SOLO_PARALLEL_ERROR, solo_parallel_set_mode(NULL, SOLO_PARALLEL_MODE_SPP));
 
-    /* Opening an invalid device path returns NULL and populates err_msg */
-    p = solo_parallel_open("/dev/nonexistent_parallel_exhaustive_xyz", &err_msg);
+    /* Opening an invalid device path returns NULL and populates err_buf */
+    err_buf[0] = '\0';
+    p = solo_parallel_open("/dev/nonexistent_parallel_exhaustive_xyz", err_buf, sizeof(err_buf));
     ASSERT_EQ(NULL, p);
-    ASSERT(err_msg != NULL);
-    free(err_msg);
-    err_msg = NULL;
+    ASSERT(strlen(err_buf) > 0);
 
     PASS();
 }
