@@ -12,7 +12,7 @@ set_warnings("all", "extra")
 add_rules("mode.debug", "mode.release")
 
 -- Public C headers exposed to downstream consumers
-add_includedirs("include", {public = true})
+add_includedirs("include")
 
 -- Official Projectum Lunare Package Repository & Build Infrastructure Addon
 add_repositories("projectum-lunare https://github.com/projectum-lunare/xmake-repo.git")
@@ -25,137 +25,216 @@ if is_plat("linux", "macosx", "bsd", "windows", "mingw") then
 end
 
 -- ==============================================================================
+-- Platform Driver & Toolchain Declarative Matrix
+-- ==============================================================================
+local PLATFORMS = {
+    -- Vintage & Retro Platforms
+    amiga = {
+        targetdir  = "build/amiga",
+        filesystem = "amiga",
+        parallel   = "amiga",
+        serial     = "amiga",
+        socket     = "bsd",
+        sandbox    = "stub",
+        language   = "gnu89",
+    },
+    atari = {
+        targetdir  = "build/atarist",
+        filesystem = "atarist",
+        parallel   = "atarist",
+        serial     = "atarist",
+        socket     = "bsd",
+        sandbox    = "stub",
+        language   = "gnu89",
+    },
+    kolibri = {
+        targetdir  = "build/kolibri",
+        filesystem = "kolibri",
+        parallel   = "kolibri",
+        serial     = "kolibri",
+        socket     = "kolibri",
+        sandbox    = "stub",
+        language   = "gnu89",
+        cxflags    = {"-nostdlib", "-U_WIN32", "-D__KOLIBRIOS__"},
+    },
+    dos = {
+        targetdir  = "build/dos",
+        filesystem = "dos",
+        parallel   = "dos",
+        serial     = "dos",
+        socket     = "bsd",
+        sandbox    = "stub",
+        rules      = "forge.watcom",
+        watt32     = true,
+    },
+    os2 = {
+        targetdir  = "build/os2",
+        filesystem = "os2",
+        parallel   = "os2",
+        serial     = "os2",
+        socket     = "bsd",
+        sandbox    = "stub",
+        rules      = "forge.watcom",
+    },
+    wince = {
+        targetdir  = "build/windows_ce",
+        filesystem = "windows_ce",
+        parallel   = "windows_ce",
+        serial     = "windows_ce",
+        socket     = "bsd",
+        sandbox    = "stub",
+        rules      = "forge.evc3",
+        arch_dir   = true,
+    },
+
+    -- Windows NT & MinGW
+    windows = {
+        targetdir  = "build/windows_nt",
+        filesystem = "windows_nt",
+        parallel   = "windows_nt",
+        serial     = "windows_nt",
+        socket     = "bsd",
+        sandbox    = "stub",
+        can_test   = true,
+    },
+    mingw = {
+        targetdir  = "build/windows_nt",
+        filesystem = "windows_nt",
+        parallel   = "windows_nt",
+        serial     = "windows_nt",
+        socket     = "bsd",
+        sandbox    = "stub",
+        can_test   = true,
+    },
+
+    -- Plan 9 from Bell Labs
+    plan9 = {
+        targetdir  = "build/plan9",
+        filesystem = "plan9",
+        parallel   = "plan9",
+        serial     = "plan9",
+        socket     = "plan9",
+        sandbox    = "stub",
+    },
+
+    -- POSIX & Modern Unix (Linux, BSDs, macOS)
+    linux = {
+        targetdir  = "build/posix",
+        filesystem = "posix",
+        parallel   = "posix",
+        serial     = "posix",
+        socket     = "bsd",
+        sandbox    = "linux",
+        pic        = true,
+        can_test   = true,
+    },
+    openbsd = {
+        targetdir  = "build/posix",
+        filesystem = "posix",
+        parallel   = "posix",
+        serial     = "posix",
+        socket     = "bsd",
+        sandbox    = "openbsd",
+        pic        = true,
+        can_test   = true,
+    },
+    freebsd = {
+        targetdir  = "build/posix",
+        filesystem = "posix",
+        parallel   = "posix",
+        serial     = "posix",
+        socket     = "bsd",
+        sandbox    = "freebsd",
+        pic        = true,
+        can_test   = true,
+    },
+    bsd = {
+        targetdir  = "build/posix",
+        filesystem = "posix",
+        parallel   = "posix",
+        serial     = "posix",
+        socket     = "bsd",
+        sandbox    = "freebsd",
+        pic        = true,
+        can_test   = true,
+    },
+    netbsd = {
+        targetdir  = "build/posix",
+        filesystem = "posix",
+        parallel   = "posix",
+        serial     = "posix",
+        socket     = "bsd",
+        sandbox    = "stub",
+        pic        = true,
+        can_test   = true,
+    },
+    dragonflybsd = {
+        targetdir  = "build/posix",
+        filesystem = "posix",
+        parallel   = "posix",
+        serial     = "posix",
+        socket     = "bsd",
+        sandbox    = "stub",
+        pic        = true,
+        can_test   = true,
+    },
+    macosx = {
+        targetdir  = "build/posix",
+        filesystem = "posix",
+        parallel   = "stub",
+        serial     = "posix",
+        socket     = "bsd",
+        sandbox    = "stub",
+        pic        = true,
+        can_test   = true,
+    },
+}
+
+local plat_name = get_config("plat") or os.host()
+local conf = PLATFORMS[plat_name] or {
+    targetdir  = "build/stub",
+    filesystem = "stub",
+    parallel   = "stub",
+    serial     = "stub",
+    socket     = "stub",
+    sandbox    = "stub",
+}
+local target_dir = conf.arch_dir and (conf.targetdir .. "/" .. (get_config("arch") or "arm")) or conf.targetdir
+
+local function apply_platform_rules(c)
+    if c.language then set_languages(c.language) end
+    if c.rules then add_rules(c.rules, {override = true}) end
+    if c.cxflags then add_cxflags(c.cxflags, {force = true}) end
+    if c.pic then add_cxflags("-fPIC") end
+    if c.watt32 then
+        local watt32 = os.getenv("WATT32_DIR") or path.join(os.getenv("HOME") or "", ".local/opt/watt32")
+        if os.isdir(path.join(watt32, "inc")) then
+            add_defines("USE_WATT32")
+            add_includedirs(path.join(watt32, "inc"))
+        end
+    end
+end
+
+-- ==============================================================================
 -- 1. Static C89 Library (libsolo.a / solo.lib) - Multi-Platform Engine
 -- ==============================================================================
 target("solo_static")
     set_kind("static")
     set_basename("solo")
-
-    -- Core foundation sources and public API headers
+    set_targetdir(target_dir)
+    add_headerfiles("include/(solo/*.h)")
     add_files(
         "src/solo.c",
         "src/platform/platform.c",
         "src/filesystem/filesystem.c",
-        "src/socket/socket_common.c"
+        "src/socket/socket_common.c",
+        "src/filesystem/filesystem_" .. conf.filesystem .. ".c",
+        "src/parallel/parallel_" .. conf.parallel .. ".c",
+        "src/serial/serial_" .. conf.serial .. ".c",
+        "src/socket/socket_" .. conf.socket .. ".c",
+        "src/sandbox/sandbox_" .. conf.sandbox .. ".c"
     )
-    add_headerfiles("include/(solo/*.h)")
-
-    -- Platform-specific drivers and cross-compilation rules
-    if is_plat("amiga") then
-        set_targetdir("build/amiga")
-        set_languages("gnu89")
-        add_files(
-            "src/filesystem/filesystem_amiga.c",
-            "src/parallel/parallel_amiga.c",
-            "src/serial/serial_amiga.c",
-            "src/socket/socket_bsd.c",
-            "src/sandbox/sandbox_stub.c"
-        )
-    elseif is_plat("atari") then
-        set_targetdir("build/atarist")
-        set_languages("gnu89")
-        add_files(
-            "src/filesystem/filesystem_atarist.c",
-            "src/parallel/parallel_atarist.c",
-            "src/serial/serial_atarist.c",
-            "src/socket/socket_bsd.c",
-            "src/sandbox/sandbox_stub.c"
-        )
-    elseif is_plat("kolibri") then
-        set_targetdir("build/kolibri")
-        set_languages("gnu89")
-        add_cxflags("-nostdlib", "-U_WIN32", "-D__KOLIBRIOS__", {force = true})
-        add_files(
-            "src/filesystem/filesystem_kolibri.c",
-            "src/parallel/parallel_kolibri.c",
-            "src/serial/serial_kolibri.c",
-            "src/socket/socket_kolibri.c",
-            "src/sandbox/sandbox_stub.c"
-        )
-    elseif is_plat("dos") then
-        set_targetdir("build/dos")
-        add_rules("forge.watcom", {override = true})
-        add_files(
-            "src/filesystem/filesystem_dos.c",
-            "src/parallel/parallel_dos.c",
-            "src/serial/serial_dos.c",
-            "src/socket/socket_bsd.c",
-            "src/sandbox/sandbox_stub.c"
-        )
-        -- WATT-32 TCP/IP stack integration
-        local watt32_dir = os.getenv("WATT32_DIR") or path.join(os.getenv("HOME") or "", ".local/opt/watt32")
-        if os.isdir(path.join(watt32_dir, "inc")) then
-            add_defines("USE_WATT32")
-            add_includedirs(path.join(watt32_dir, "inc"))
-        end
-    elseif is_plat("os2") then
-        set_targetdir("build/os2")
-        add_rules("forge.watcom", {override = true})
-        add_files(
-            "src/filesystem/filesystem_os2.c",
-            "src/parallel/parallel_os2.c",
-            "src/serial/serial_os2.c",
-            "src/socket/socket_bsd.c",
-            "src/sandbox/sandbox_stub.c"
-        )
-    elseif is_plat("wince") then
-        local arch = get_config("arch") or "arm"
-        set_targetdir("build/windows_ce/" .. arch)
-        add_rules("forge.evc3", {override = true})
-        add_files(
-            "src/filesystem/filesystem_windows_ce.c",
-            "src/parallel/parallel_windows_ce.c",
-            "src/serial/serial_windows_ce.c",
-            "src/socket/socket_bsd.c",
-            "src/sandbox/sandbox_stub.c"
-        )
-    elseif is_plat("windows", "mingw") then
-        set_targetdir("build/windows_nt")
-        add_files(
-            "src/filesystem/filesystem_windows_nt.c",
-            "src/parallel/parallel_windows_nt.c",
-            "src/serial/serial_windows_nt.c",
-            "src/socket/socket_bsd.c",
-            "src/sandbox/sandbox_stub.c"
-        )
-    elseif is_plat("plan9") then
-        set_targetdir("build/plan9")
-        add_files(
-            "src/filesystem/filesystem_plan9.c",
-            "src/parallel/parallel_plan9.c",
-            "src/serial/serial_plan9.c",
-            "src/socket/socket_plan9.c",
-            "src/sandbox/sandbox_stub.c"
-        )
-    elseif is_plat("linux", "macosx", "bsd") then
-        set_targetdir("build/posix")
-        add_cxflags("-fPIC")
-        add_files(
-            "src/filesystem/filesystem_posix.c",
-            "src/parallel/parallel_posix.c",
-            "src/serial/serial_posix.c",
-            "src/socket/socket_bsd.c"
-        )
-        if is_plat("linux") then
-            add_files("src/sandbox/sandbox_linux.c")
-        elseif is_plat("openbsd") then
-            add_files("src/sandbox/sandbox_openbsd.c")
-        elseif is_plat("freebsd", "bsd") then
-            add_files("src/sandbox/sandbox_freebsd.c")
-        else
-            add_files("src/sandbox/sandbox_stub.c")
-        end
-    else
-        -- Generic C89 stub fallback
-        set_targetdir("build/stub")
-        add_files(
-            "src/filesystem/filesystem_stub.c",
-            "src/parallel/parallel_stub.c",
-            "src/serial/serial_stub.c",
-            "src/socket/socket_stub.c",
-            "src/sandbox/sandbox_stub.c"
-        )
-    end
+    apply_platform_rules(conf)
 
 -- ==============================================================================
 -- 2. Lua Subsystem & C Modules (Powered by forge.lua.module)
@@ -184,27 +263,14 @@ target("solo")
     end)
 
 -- 2.3 Standalone C Modules (build/lua/solo/<submodule>.so)
-local sandbox_driver = is_plat("linux") and "src/sandbox/sandbox_linux.c"
-                    or (is_plat("openbsd") and "src/sandbox/sandbox_openbsd.c"
-                    or (is_plat("freebsd", "bsd") and "src/sandbox/sandbox_freebsd.c"
-                    or "src/sandbox/sandbox_stub.c"))
-
-local is_win = is_plat("windows", "mingw")
-local is_wince = is_plat("wince")
-local serial_driver     = is_win and "src/serial/serial_windows_nt.c"   or "src/serial/serial_posix.c"
-local parallel_driver   = is_win and "src/parallel/parallel_windows_nt.c" or "src/parallel/parallel_posix.c"
-local filesystem_driver = is_win and "src/filesystem/filesystem_windows_nt.c"
-                       or (is_wince and "src/filesystem/filesystem_windows_ce.c" or "src/filesystem/filesystem_posix.c")
-local socket_driver     = "src/socket/socket_bsd.c"
-
 local submodules = {
     platform   = {"src/platform/platform_lua.c", "src/platform/platform.c"},
-    filesystem = {"src/filesystem/filesystem_lua.c", "src/filesystem/filesystem.c", filesystem_driver, "src/platform/platform.c"},
-    fs         = {"src/filesystem/filesystem_lua.c", "src/filesystem/filesystem.c", filesystem_driver, "src/platform/platform.c"},
-    serial     = {"src/serial/serial_lua.c", serial_driver, "src/platform/platform.c"},
-    parallel   = {"src/parallel/parallel_lua.c", parallel_driver, "src/platform/platform.c"},
-    socket     = {"src/socket/socket_lua.c", "src/socket/socket_common.c", socket_driver, "src/platform/platform.c"},
-    sandbox    = {"src/sandbox/sandbox_lua.c", sandbox_driver, "src/platform/platform.c"},
+    filesystem = {"src/filesystem/filesystem_lua.c", "src/filesystem/filesystem.c", "src/filesystem/filesystem_" .. conf.filesystem .. ".c", "src/platform/platform.c"},
+    fs         = {"src/filesystem/filesystem_lua.c", "src/filesystem/filesystem.c", "src/filesystem/filesystem_" .. conf.filesystem .. ".c", "src/platform/platform.c"},
+    serial     = {"src/serial/serial_lua.c", "src/serial/serial_" .. conf.serial .. ".c", "src/platform/platform.c"},
+    parallel   = {"src/parallel/parallel_lua.c", "src/parallel/parallel_" .. conf.parallel .. ".c", "src/platform/platform.c"},
+    socket     = {"src/socket/socket_lua.c", "src/socket/socket_common.c", "src/socket/socket_" .. conf.socket .. ".c", "src/platform/platform.c"},
+    sandbox    = {"src/sandbox/sandbox_lua.c", "src/sandbox/sandbox_" .. conf.sandbox .. ".c", "src/platform/platform.c"},
 }
 
 for mod_name, files in pairs(submodules) do
@@ -252,24 +318,11 @@ end -- is_plat(host)
 target("solo_smoke")
     set_kind("binary")
     set_rundir(os.projectdir())
+    set_targetdir(target_dir)
     add_files("tests/smoke.c")
     add_deps("solo_static")
-    if is_plat("amiga") then
-        set_targetdir("build/amiga")
-        set_languages("gnu89")
-    elseif is_plat("atari") then
-        set_targetdir("build/atarist")
-        set_languages("gnu89")
-    elseif is_plat("dos") then
-        set_targetdir("build/dos")
-        add_rules("forge.watcom", {override = true})
-    elseif is_plat("os2") then
-        set_targetdir("build/os2")
-        add_rules("forge.watcom", {override = true})
-    elseif is_plat("kolibri") then
-        set_targetdir("build/kolibri")
-        add_cxflags("-nostdlib", "-U_WIN32", "-D__KOLIBRIOS__", {force = true})
-    else
+    apply_platform_rules(conf)
+    if conf.can_test then
         set_targetdir("build/bin")
         add_tests("smoke")
     end
