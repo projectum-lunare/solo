@@ -37,6 +37,7 @@ typedef solo_status_t solo_socket_status_t;
 typedef solo_status_t solo_serial_status_t;
 typedef solo_status_t solo_parallel_status_t;
 typedef solo_status_t solo_sandbox_status_t;
+typedef solo_status_t solo_fs_status_t;
 
 #define SOLO_SOCK_OK            SOLO_OK
 #define SOLO_SOCK_ERROR         SOLO_ERROR
@@ -54,6 +55,11 @@ typedef solo_status_t solo_sandbox_status_t;
 #define SOLO_SANDBOX_OK          SOLO_OK
 #define SOLO_SANDBOX_ERROR       SOLO_ERROR
 #define SOLO_SANDBOX_UNSUPPORTED SOLO_UNSUPPORTED
+
+#define SOLO_FS_OK          SOLO_OK
+#define SOLO_FS_ERROR       SOLO_ERROR
+#define SOLO_FS_UNSUPPORTED SOLO_UNSUPPORTED
+#define SOLO_FS_EOF         SOLO_EOF
 
 /*
  * Returns a static descriptive error string corresponding to a solo_status_t code.

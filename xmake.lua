@@ -45,6 +45,7 @@ target("solo_static")
         set_targetdir("build/amiga")
         set_languages("gnu89")
         add_files(
+            "src/filesystem/filesystem_amiga.c",
             "src/parallel/parallel_amiga.c",
             "src/serial/serial_amiga.c",
             "src/socket/socket_bsd.c",
@@ -54,6 +55,7 @@ target("solo_static")
         set_targetdir("build/atarist")
         set_languages("gnu89")
         add_files(
+            "src/filesystem/filesystem_atarist.c",
             "src/parallel/parallel_atarist.c",
             "src/serial/serial_atarist.c",
             "src/socket/socket_bsd.c",
@@ -64,6 +66,7 @@ target("solo_static")
         set_languages("gnu89")
         add_cxflags("-nostdlib", "-U_WIN32", "-D__KOLIBRIOS__", {force = true})
         add_files(
+            "src/filesystem/filesystem_kolibri.c",
             "src/parallel/parallel_kolibri.c",
             "src/serial/serial_kolibri.c",
             "src/socket/socket_kolibri.c",
@@ -73,6 +76,7 @@ target("solo_static")
         set_targetdir("build/dos")
         add_rules("forge.watcom", {override = true})
         add_files(
+            "src/filesystem/filesystem_dos.c",
             "src/parallel/parallel_dos.c",
             "src/serial/serial_dos.c",
             "src/socket/socket_bsd.c",
@@ -88,6 +92,7 @@ target("solo_static")
         set_targetdir("build/os2")
         add_rules("forge.watcom", {override = true})
         add_files(
+            "src/filesystem/filesystem_os2.c",
             "src/parallel/parallel_os2.c",
             "src/serial/serial_os2.c",
             "src/socket/socket_bsd.c",
@@ -98,6 +103,7 @@ target("solo_static")
         set_targetdir("build/windows_ce/" .. arch)
         add_rules("forge.evc3", {override = true})
         add_files(
+            "src/filesystem/filesystem_windows_ce.c",
             "src/parallel/parallel_windows_ce.c",
             "src/serial/serial_windows_ce.c",
             "src/socket/socket_bsd.c",
@@ -106,6 +112,7 @@ target("solo_static")
     elseif is_plat("windows", "mingw") then
         set_targetdir("build/windows_nt")
         add_files(
+            "src/filesystem/filesystem_windows_nt.c",
             "src/parallel/parallel_windows_nt.c",
             "src/serial/serial_windows_nt.c",
             "src/socket/socket_bsd.c",
@@ -114,6 +121,7 @@ target("solo_static")
     elseif is_plat("plan9") then
         set_targetdir("build/plan9")
         add_files(
+            "src/filesystem/filesystem_plan9.c",
             "src/parallel/parallel_plan9.c",
             "src/serial/serial_plan9.c",
             "src/socket/socket_plan9.c",
@@ -123,6 +131,7 @@ target("solo_static")
         set_targetdir("build/posix")
         add_cxflags("-fPIC")
         add_files(
+            "src/filesystem/filesystem_posix.c",
             "src/parallel/parallel_posix.c",
             "src/serial/serial_posix.c",
             "src/socket/socket_bsd.c"
@@ -140,6 +149,7 @@ target("solo_static")
         -- Generic C89 stub fallback
         set_targetdir("build/stub")
         add_files(
+            "src/filesystem/filesystem_stub.c",
             "src/parallel/parallel_stub.c",
             "src/serial/serial_stub.c",
             "src/socket/socket_stub.c",
@@ -179,14 +189,17 @@ local sandbox_driver = is_plat("linux") and "src/sandbox/sandbox_linux.c"
                     or "src/sandbox/sandbox_stub.c"))
 
 local is_win = is_plat("windows", "mingw")
-local serial_driver   = is_win and "src/serial/serial_windows_nt.c"   or "src/serial/serial_posix.c"
-local parallel_driver = is_win and "src/parallel/parallel_windows_nt.c" or "src/parallel/parallel_posix.c"
-local socket_driver   = "src/socket/socket_bsd.c"
+local is_wince = is_plat("wince")
+local serial_driver     = is_win and "src/serial/serial_windows_nt.c"   or "src/serial/serial_posix.c"
+local parallel_driver   = is_win and "src/parallel/parallel_windows_nt.c" or "src/parallel/parallel_posix.c"
+local filesystem_driver = is_win and "src/filesystem/filesystem_windows_nt.c"
+                       or (is_wince and "src/filesystem/filesystem_windows_ce.c" or "src/filesystem/filesystem_posix.c")
+local socket_driver     = "src/socket/socket_bsd.c"
 
 local submodules = {
     platform   = {"src/platform/platform_lua.c", "src/platform/platform.c"},
-    filesystem = {"src/filesystem/filesystem_lua.c", "src/filesystem/filesystem.c", "src/platform/platform.c"},
-    fs         = {"src/filesystem/filesystem_lua.c", "src/filesystem/filesystem.c", "src/platform/platform.c"},
+    filesystem = {"src/filesystem/filesystem_lua.c", "src/filesystem/filesystem.c", filesystem_driver, "src/platform/platform.c"},
+    fs         = {"src/filesystem/filesystem_lua.c", "src/filesystem/filesystem.c", filesystem_driver, "src/platform/platform.c"},
     serial     = {"src/serial/serial_lua.c", serial_driver, "src/platform/platform.c"},
     parallel   = {"src/parallel/parallel_lua.c", parallel_driver, "src/platform/platform.c"},
     socket     = {"src/socket/socket_lua.c", "src/socket/socket_common.c", socket_driver, "src/platform/platform.c"},
