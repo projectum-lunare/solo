@@ -16,7 +16,7 @@ add_includedirs("include", {public = true})
 
 -- Official Projectum Lunare Package Repository & Build Infrastructure Addon
 add_repositories("projectum-lunare https://github.com/projectum-lunare/xmake-repo.git")
-add_addons("forge")
+add_addons("forge master")
 includes("@addon/forge/forge.lua")
 
 -- Host dependencies for Lua C bindings and C test suites
@@ -165,7 +165,7 @@ if is_plat("linux", "macosx", "bsd", "windows", "mingw") then
 -- 2.1 Static Lua C Module (libsolo_lua.a / solo_lua.lib) for embedding
 target("solo_lua_static")
     add_rules("forge.lua.module")
-    set_kind("static")
+    set_values("forge.lua.kind", "static")
     set_basename("solo_lua")
     add_deps("solo_static")
     add_defines("LUA_USE_C89")
@@ -174,6 +174,7 @@ target("solo_lua_static")
 -- 2.2 Umbrella Shared Lua C Module (build/lua/solo.so & ./solo.so)
 target("solo")
     add_rules("forge.lua.module")
+    set_values("forge.lua.kind", "shared")
     add_deps("solo_static")
     add_defines("LUA_USE_C89")
     add_files("src/**_lua.c")
@@ -209,6 +210,7 @@ local submodules = {
 for mod_name, files in pairs(submodules) do
     target("solo." .. mod_name)
         add_rules("forge.lua.module")
+        set_values("forge.lua.kind", "shared")
         add_defines("LUA_USE_C89")
         add_files(files)
 end
