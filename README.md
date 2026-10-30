@@ -4,10 +4,10 @@
 > _Part of the [Projectum Lunare](https://github.com/projectum-lunare) Ecosystem._
 
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-blue.svg)](https://mozilla.org/MPL/2.0/)
-[![Language: ANSI C89](https://img.shields.io/badge/C-ANSI_C89-brightgreen.svg)]()
+[![Language: ANSI C89 / GNU89](https://img.shields.io/badge/C-ANSI_C89_%2F_GNU89-brightgreen.svg)]()
 [![Lua: 5.4-5.5](https://img.shields.io/badge/Lua-5.4_--_5.5-blue.svg)]()
 
-`solo` is a portable, zero-bloat system foundation library with public C headers and core logic designed for strict ANSI C (C89 / ISO C90) and first-class Lua bindings. Low-level vintage device drivers compile under `gnu89` where platform SDKs require GCC extensions (`__asm__`, struct alignment, register calling conventions). It bridges hardware I/O, network communication, physical ports, persistent filesystems, and kernel-level sandboxing across **10 distinct operating system families** — from vintage platforms of the 1990s (DOS, Amiga, Windows CE, Atari ST) to modern POSIX workstations in 2026.
+`solo` is a portable, zero-bloat system foundation library featuring public C headers and core interfaces designed for strict ANSI C (C89 / ISO C90) interoperability, with implementations and vintage drivers targeting `gnu89` (leveraging standard platform runtime features like `vsnprintf` and GCC extensions such as `__asm__`, struct alignment, and register calling conventions). It bridges hardware I/O, network communication, physical ports, persistent filesystems, and kernel-level sandboxing across **10 distinct operating system families** — from vintage platforms of the 1990s (DOS, Amiga, Windows CE, Atari ST) to modern POSIX workstations in 2026.
 
 ---
 
@@ -153,7 +153,9 @@ end
 #include <solo/solo.h>
 
 int main(void) {
-    char *err = NULL;
+    char err_buf[128];
+    solo_socket_t *sock;
+    size_t sent = 0;
 
     printf("solo version: %s\n", solo_version());
     printf("OS: %s, Arch: %s\n", solo_platform_os(), solo_platform_arch());
@@ -163,15 +165,14 @@ int main(void) {
     }
 
     /* Connect to raw TCP socket */
-    solo_socket_t *sock = solo_socket_connect("127.0.0.1", 1993, SOLO_SOCK_BLOCKING, &err);
+    sock = solo_socket_connect("127.0.0.1", 1993, SOLO_SOCK_BLOCKING, err_buf, sizeof(err_buf));
     if (!sock) {
-        fprintf(stderr, "Connection failed: %s\n", err);
+        fprintf(stderr, "Connection failed: %s\n", err_buf);
         return 1;
     }
 
-    size_t sent = 0;
     if (solo_socket_send(sock, "GET / HTTP/1.0\r\n\r\n", 18, &sent) == SOLO_SOCK_OK) {
-        printf("Sent %zu bytes\n", sent);
+        printf("Sent %lu bytes\n", (unsigned long)sent);
     }
     solo_socket_close(sock);
     return 0;
@@ -182,7 +183,7 @@ int main(void) {
 
 ## 📦 Building and Testing
 
-`solo` public C headers (`include/solo/*.h`) and core common logic are strictly ANSI C89 (C90) compliant, ensuring universal interoperability across vintage and modern C compilers. Target-specific low-level drivers that interface directly with hardware registers or OS SDKs (such as AmigaOS m68k, Atari ST TOS/MiNT, and KolibriOS) compile under `gnu89` with GCC extensions (`__asm__`, struct alignment, `#pragma`).
+`solo` public C headers (`include/solo/*.h`) and consumer-facing C code are strictly ANSI C89 (C90) compliant, ensuring clean interoperability across vintage and modern C compilers. Internal library implementations and platform-specific drivers (such as AmigaOS m68k, Atari ST TOS/MiNT, and KolibriOS) compile under `gnu89` where compiler extensions (`__asm__`, struct alignment, `#pragma`) and standard C-runtime features (such as `vsnprintf`) are utilized.
 
 The project uses [xmake](https://xmake.io) and [Forge](https://github.com/projectum-lunare/forge) as its unified build system.
 
