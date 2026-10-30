@@ -85,7 +85,7 @@ The library is structured as a cohesive monorepo divided into specialized subsys
 | **MS-DOS (16/32-bit WATT-32)**    |     ✅     | ✅ DOS io    | ✅ `INT 17h` / I/O   | ✅ `INT 14h` / 8250 | ✅ WATT-32 TCP/IP      | ⚠️ Stub              |
 | **AmigaOS (m68k / AROS)**         |     ✅     | ✅ Lock DOS  | ✅ `parallel.device` | ✅ `serial.device`  | ✅ `bsdsocket.library` | ⚠️ Stub              |
 | **Atari ST (TOS / MiNT)**         |     ✅     | ✅ Fsfirst   | ✅ Hardware I/O      | ✅ MFP 68901 UART   | ✅ Socket API          | ⚠️ Stub              |
-| **KolibriOS**                     |     ✅     | ✅ Syscall   | ✅ Syscall 68        | ✅ Syscall 43       | ✅ Syscall 53          | ⚠️ Stub              |
+| **KolibriOS**                     |     ✅     | ⚠️ Stub      | ✅ Syscall 46 / I/O  | ✅ Syscall 46 / UART| ✅ Syscall 75          | ⚠️ Stub              |
 | **OS/2 / ArcaOS**                 |     ✅     | ✅ access    | ✅ DosOpen LPT       | ✅ DosDevIOCtl      | ✅ TCP/IP Sockets      | ⚠️ Stub              |
 | **Plan 9 from Bell Labs**         |     ✅     | ✅ access    | ✅ `/dev/lp`         | ✅ `/dev/eia*`      | ✅ `/net/tcp`          | ⚠️ Stub              |
 
