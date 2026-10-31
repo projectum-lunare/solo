@@ -1,7 +1,9 @@
 site_name: solo
+site_url: https://projectum-lunare.github.io/solo/
 site_description: Lightweight, modular C89 and Lua systems programming library for modern and vintage operating systems.
 site_author: Gustavo Veiga
-repo_name: solo
+repo_name: projectum-lunare/solo
+repo_url: https://github.com/projectum-lunare/solo
 edit_uri: ""
 
 theme:
