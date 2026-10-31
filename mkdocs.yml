@@ -70,21 +70,29 @@ nav:
       - C89 API Usage: getting-started/c-api.md
       - Lua API Usage: getting-started/lua-api.md
   - Architecture:
-    - Design Philosophy: architecture/philosophy.md
-    - Canonical Type System: architecture/types.md
-    - Platform Abstraction Layer: architecture/pal.md
+      - Design Philosophy: architecture/philosophy.md
+      - Canonical Type System: architecture/types.md
+      - Platform Abstraction Layer: architecture/pal.md
+      - PAL Porting Guide: architecture/porting-guide.md
   - Subsystems:
-    - Platform Detection: subsystems/platform.md
-    - Filesystem & Path I/O: subsystems/filesystem.md
-    - Network Sockets: subsystems/socket.md
-    - Serial Port (UART): subsystems/serial.md
-    - Parallel Port (IEEE 1284): subsystems/parallel.md
-    - Kernel Sandboxing: subsystems/sandbox.md
+      - Platform Detection: subsystems/platform.md
+      - Filesystem & Path I/O: subsystems/filesystem.md
+      - Network Sockets: subsystems/socket.md
+      - Serial Port (UART): subsystems/serial.md
+      - Parallel Port (IEEE 1284): subsystems/parallel.md
+      - Kernel Sandboxing: subsystems/sandbox.md
+  - Recipes & Guides:
+      - Overview: recipes/index.md
+      - Asynchronous TCP Echo Server: recipes/tcp-echo-server.md
+      - Industrial Serial GPS Reader: recipes/industrial-serial.md
+      - Defense-in-Depth CLI Sandbox: recipes/hardened-cli.md
+      - Centronics Impact Printing: recipes/parallel-strobe.md
   - Platforms:
-    - Support Matrix: platforms/matrix.md
-    - Modern POSIX: platforms/posix.md
-    - Windows (NT 3.51..11, CE): platforms/windows.md
-    - Retro Stacks (DOS, Amiga, Atari): platforms/retro.md
-    - Exotic Kernels (KolibriOS, OS/2, Plan 9): platforms/exotic.md
+      - Support Matrix: platforms/matrix.md
+      - Modern POSIX: platforms/posix.md
+      - Windows (NT 3.51..11, CE): platforms/windows.md
+      - Retro Stacks (DOS, Amiga, Atari): platforms/retro.md
+      - Exotic Kernels (KolibriOS, OS/2, Plan 9): platforms/exotic.md
+      - Kernel Internals & Gotchas: platforms/internals.md
   - Cross-Compilation:
     - Forge Multi-Target Matrix: cross-compilation/forge.md

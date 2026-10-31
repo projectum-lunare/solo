@@ -1,81 +1,61 @@
 # Platform Detection (`solo.platform`)
 
-The `platform` subsystem provides compile-time and runtime introspection of the host operating system, CPU architecture, bitness, and endianness.
+The `platform` subsystem provides compile-time and runtime introspection of operating system families, CPU architectures, bitness, and byte order.
 
 ---
 
-## Introspection Properties
+## 1. Introspection Functions
 
-=== "C (C89)"
+### Host Metadata
+```c
+const char *solo_platform_os(void);     /* Returns OS identifier string */
+const char *solo_platform_arch(void);   /* Returns CPU architecture string */
+int         solo_platform_bits(void);   /* Returns 16, 32, or 64 */
+```
 
-    ```c
-    #include <stdio.h>
-    #include <solo/solo.h>
-
-    void print_environment(void) {
-        printf("Operating System: %s\n", solo_platform_os());
-        printf("Architecture:     %s\n", solo_platform_arch());
-        printf("Word Size (bits): %d\n", solo_platform_bits());
-
-        if (solo_platform_is_64bit() == SOLO_TRUE) {
-            printf("Target is 64-bit.\n");
-        }
-        if (solo_platform_is_little_endian() == SOLO_TRUE) {
-            printf("Target is Little-Endian.\n");
-        } else {
-            printf("Target is Big-Endian.\n");
-        }
-    }
-    ```
-
-=== "Lua"
-
-    ```lua
-    local platform = require("solo.platform")
-
-    print("Operating System: " .. platform.os)
-    print("Architecture:     " .. platform.arch)
-    print("Word Size (bits): " .. platform.bits)
-    print("Is 64-bit:        " .. tostring(platform.is_64bit))
-    print("Is Little Endian: " .. tostring(platform.is_little_endian))
-
-    -- Platform Family Boolean Flags:
-    if platform.is_linux then
-        print("Running on Linux")
-    elseif platform.is_windows then
-        print("Running on Windows")
-    elseif platform.is_dos then
-        print("Running on MS-DOS")
-    elseif platform.is_amiga then
-        print("Running on AmigaOS")
-    end
-    ```
+### Canonical Boolean Predicates
+```c
+solo_bool_t solo_platform_is_64bit(void);
+solo_bool_t solo_platform_is_little_endian(void);
+solo_bool_t solo_platform_is_big_endian(void);
+```
 
 ---
 
-## Operating System String Identifiers
+## 2. Platform Family Flags
 
-`solo_platform_os()` / `platform.os` returns one of the canonical identifiers:
-- `"linux"`
-- `"freebsd"`, `"openbsd"`, `"netbsd"`
-- `"darwin"` (macOS, iOS)
-- `"windows"`
-- `"windows_ce"`
-- `"dos"`
-- `"amigaos"`
-- `"atarist"`
-- `"kolibrios"`
-- `"os2"`
-- `"plan9"`
+| C Macro Flag | Lua Property | Supported OS Targets |
+| :--- | :--- | :--- |
+| `SOLO_IS_POSIX` | `platform.is_posix` | Linux, FreeBSD, OpenBSD, NetBSD, macOS, Haiku, Solaris |
+| `SOLO_IS_LINUX` | `platform.is_linux` | Linux distributions (glibc, musl, uClibc, Android) |
+| `SOLO_IS_BSD` | `platform.is_bsd` | FreeBSD, OpenBSD, NetBSD, DragonFly BSD |
+| `SOLO_IS_DARWIN` | `platform.is_darwin` | macOS, iOS, iPadOS |
+| `SOLO_IS_WINDOWS` | `platform.is_windows` | Windows NT (3.51..11, Server), WinCE / Pocket PC |
+| `SOLO_IS_DOS` | `platform.is_dos` | MS-DOS, FreeDOS, PC-DOS (16/32-bit via Watcom/DJGPP) |
+| `SOLO_IS_AMIGA` | `platform.is_amiga` | AmigaOS (Classic m68k, AROS, MorphOS) |
+| `SOLO_IS_ATARIST` | `platform.is_atarist`| Atari ST / TT / Falcon (TOS, FreeMiNT) |
+| `SOLO_IS_KOLIBRI` | `platform.is_kolibri`| KolibriOS (32-bit x86 assembly OS) |
+| `SOLO_IS_OS2` | `platform.is_os2` | IBM OS/2 Warp 3/4, ArcaOS, eComStation |
+| `SOLO_IS_PLAN9` | `platform.is_plan9` | Plan 9 from Bell Labs, 9front |
 
 ---
 
-## Architecture String Identifiers
+## 3. Lua API Reference
 
-`solo_platform_arch()` / `platform.arch` returns:
-- `"x86_64"`, `"x86"` (i386..i686)
-- `"arm64"`, `"arm"`
-- `"m68k"` (Motorola 68000..68060)
-- `"riscv64"`, `"riscv32"`
-- `"ppc64"`, `"ppc"`
-- `"mips"`
+```lua
+local platform = require("solo.platform")
+
+print("OS:        " .. platform.os)
+print("Arch:      " .. platform.arch)
+print("Word size: " .. platform.bits)
+
+if platform.is_64bit then
+    print("Host has 64-bit pointers and registers")
+end
+
+if platform.is_little_endian then
+    print("Host byte order is Little Endian (x86, ARM, RISC-V)")
+else
+    print("Host byte order is Big Endian (m68k, SPARC, PPC)")
+end
+```

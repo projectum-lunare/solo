@@ -1,58 +1,89 @@
 # Kernel Sandboxing (`solo.sandbox`)
 
-The `sandbox` subsystem provides unified kernel-level sandboxing, enforcing the principle of least privilege directly inside operating system kernels.
+The `sandbox` subsystem provides operating system-enforced application containment using native kernel security primitives.
 
 ---
 
-## Supported Kernel Backends
+## 1. Constants & Enumerations
 
-- **Linux:** Modern **Landlock LSM** filesystem restriction rulesets and `prctl(PR_SET_NO_NEW_PRIVS)`.
-- **OpenBSD:** Native path restriction via `unveil(2)` and syscall restriction via `pledge(2)`.
-- **FreeBSD:** Capability mode via `capsicum(4)`.
-- **Other Platforms:** Safe fallback stubs returning `SOLO_SANDBOX_UNSUPPORTED` with zero runtime overhead or instability.
+### Backend Identifiers (`solo_sandbox_backend_t`)
+
+| C Constant | Lua String / Backend | Description |
+| :--- | :--- | :--- |
+| `SOLO_SANDBOX_BACKEND_NONE` | `"none"` | No hardware/kernel sandbox available on host |
+| `SOLO_SANDBOX_BACKEND_LANDLOCK` | `"landlock"` | Linux Landlock LSM ruleset engine |
+| `SOLO_SANDBOX_BACKEND_OPENBSD` | `"openbsd"` | OpenBSD `unveil(2)` and `pledge(2)` |
+| `SOLO_SANDBOX_BACKEND_CAPSICUM` | `"capsicum"` | FreeBSD Capsicum capability mode |
+
+### Filesystem Permission Masks (`solo_sandbox_perm_t`)
+
+| C Constant | Lua String | Bitmask Value | Description |
+| :--- | :--- | :---: | :--- |
+| `SOLO_SANDBOX_PERM_READ` | `"r"` | `1 << 0` (`0x01`) | Read file contents, inspect directory entries |
+| `SOLO_SANDBOX_PERM_WRITE` | `"w"` | `1 << 1` (`0x02`) | Create, modify, truncate, or delete files |
+| `SOLO_SANDBOX_PERM_EXEC` | `"x"` | `1 << 2` (`0x04`) | Execute binary or script from path |
 
 ---
 
-## Sandboxing Workflow
+## 2. C89 Function Reference
 
-Sandboxing follows a strict two-stage phase:
-1. **Unveil / Allow:** Grant read, write, or execute access to specific directory paths.
-2. **Lock:** Seal the sandbox. Once locked, rules cannot be relaxed by the process or its descendants.
+### `solo_sandbox_backend`
+```c
+solo_sandbox_backend_t solo_sandbox_backend(int *version_out);
+const char *solo_sandbox_backend_name(int *version_out);
+```
+Queries the active security subsystem and stores the kernel ABI version in `version_out` (e.g. Landlock ABI `1`, `2`, `3`, or `4`).
 
-=== "C (C89)"
+---
 
-    ```c
-    #include <stdio.h>
-    #include <solo/solo.h>
+### `solo_sandbox_unveil`
+```c
+solo_sandbox_status_t solo_sandbox_unveil(
+    const char *path, 
+    int permissions, 
+    char *err_buf, 
+    size_t err_cap
+);
+```
+Whitelists a filesystem directory or file. Multiple calls accumulate into the sandbox policy.
+* **Returns:** `SOLO_SANDBOX_OK` on success, `SOLO_SANDBOX_UNSUPPORTED` if host lacks support, or `SOLO_SANDBOX_ERROR` on failure.
 
-    void isolate_process(void) {
-        /* Restrict process to read current directory and /tmp for writes */
-        solo_sandbox_unveil(".", "r");
-        solo_sandbox_unveil("/tmp", "rw");
+---
 
-        /* Lock down process permanently */
-        if (solo_sandbox_lock() == SOLO_SANDBOX_OK) {
-            printf("Process successfully isolated by host kernel.\n");
-        }
-    }
-    ```
+### `solo_sandbox_lock`
+```c
+solo_sandbox_status_t solo_sandbox_lock(char *err_buf, size_t err_cap);
+```
+Permanently seals the sandbox for the calling process and any child processes it spawns. Once locked, permissions cannot be widened.
+* **Important:** Calling `solo_sandbox_lock()` without preceding `unveil()` calls completely locks down the entire filesystem, preventing opening any path.
 
-=== "Lua"
+---
 
-    ```lua
-    local sandbox = require("solo.sandbox")
+### `solo_sandbox_pledge`
+```c
+solo_sandbox_status_t solo_sandbox_pledge(
+    const char *promises, 
+    char *err_buf, 
+    size_t err_cap
+);
+```
+Restricts available syscall categories on OpenBSD (e.g. `"stdio rpath wpath cpath inet"`). Returns `SOLO_SANDBOX_UNSUPPORTED` on non-OpenBSD platforms.
 
-    local backend, ver = sandbox.backend()
-    print(string.format("Kernel backend: %s (v%s)", backend, tostring(ver)))
+---
 
-    -- Allow reading current directory only
-    sandbox.unveil(".", "r")
+## 3. Lua API Reference
 
-    -- Seal sandbox
-    sandbox.lock()
+```lua
+local sandbox = require("solo.sandbox")
 
-    -- Attempting to open unauthorized paths will now raise permission denied (EACCES)
-    ```
+-- Introspect backend
+local name, ver = sandbox.backend()
+print(string.format("Sandbox: %s (v%s)", name, tostring(ver)))
 
-> [!WARNING] Landlock Process Inheritance
-> On Linux, the Landlock ruleset is process-wide and inherited by all child threads and fork descendants. Calling `lock()` without prior `unveil()` calls locks the entire filesystem, prohibiting all subsequent file opens.
+-- Grant read access to current directory and read/write to /tmp
+sandbox.unveil(".", "r")
+sandbox.unveil("/tmp", "rw")
+
+-- Enforce restrictions permanently
+sandbox.lock()
+```
