@@ -41,9 +41,9 @@ extern "C" {
 #endif
 
 #define SOLO_VERSION_MAJOR 0
-#define SOLO_VERSION_MINOR 1
+#define SOLO_VERSION_MINOR 2
 #define SOLO_VERSION_PATCH 0
-#define SOLO_VERSION_STRING "0.1.0"
+#define SOLO_VERSION_STRING "0.2.0"
 
 /*
  * Returns the version string of the solo runtime foundation.

@@ -6,6 +6,10 @@ repo_name: projectum-lunare/solo
 repo_url: https://github.com/projectum-lunare/solo
 edit_uri: ""
 
+watch:
+  - include
+  - src
+
 theme:
   name: material
   language: en

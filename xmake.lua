@@ -4,7 +4,7 @@
 -- Mozilla Public License Version 2.0
 
 set_project("solo")
-set_version("0.1.0")
+set_version("0.2.0")
 
 set_languages("c89")
 set_warnings("all", "extra")

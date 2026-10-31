@@ -6,6 +6,10 @@ on:
       - master
     paths:
       - "docs/**"
+      - "include/**"
+      - "src/**"
+      - "xmake.lua"
+      - "README.md"
       - "mkdocs.yml"
       - "requirements-docs.txt"
       - ".github/workflows/docs.yml"
