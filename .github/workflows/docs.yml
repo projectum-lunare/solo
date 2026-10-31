@@ -39,12 +39,17 @@ jobs:
           cache: "pip"
           cache-dependency-path: "requirements-docs.txt"
 
+      - name: Install System Dependencies (Doxygen)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen
+
       - name: Install MkDocs Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-docs.txt
 
-      - name: Build MkDocs Site
+      - name: Build MkDocs Site (with MkDoxy C API)
         run: |
           mkdocs build --strict
 

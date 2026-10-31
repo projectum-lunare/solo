@@ -40,6 +40,21 @@ theme:
     - content.code.copy
     - content.code.annotate
 
+plugins:
+  - search
+  - mkdoxy:
+      projects:
+        solo:
+          src-dirs: include/solo
+          full-doc: True
+          api-path: api
+          doxy-cfg:
+            FILE_PATTERNS: "*.h"
+            RECURSIVE: NO
+            OPTIMIZE_OUTPUT_FOR_C: YES
+            EXTRACT_ALL: YES
+            EXTRACT_STATIC: YES
+
 markdown_extensions:
   - admonition
   - attr_list
@@ -52,7 +67,8 @@ markdown_extensions:
       line_spans: __span
       pygments_lang_class: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  - pymdownx.snippets:
+      base_path: ["."]
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -87,6 +103,21 @@ nav:
       - Industrial Serial GPS Reader: recipes/industrial-serial.md
       - Defense-in-Depth CLI Sandbox: recipes/hardened-cli.md
       - Centronics Impact Printing: recipes/parallel-strobe.md
+  - C API Reference:
+      - Overview: api/links.md
+      - Headers: api/files.md
+      - Data Structures: api/classes.md
+      - Functions: api/functions.md
+      - Macros: api/macros.md
+      - Subsystems:
+          - solo.h: api/solo_8h.md
+          - types.h: api/types_8h.md
+          - socket.h: api/socket_8h.md
+          - serial.h: api/serial_8h.md
+          - parallel.h: api/parallel_8h.md
+          - filesystem.h: api/filesystem_8h.md
+          - sandbox.h: api/sandbox_8h.md
+          - platform.h: api/platform_8h.md
   - Platforms:
       - Support Matrix: platforms/matrix.md
       - Modern POSIX: platforms/posix.md

@@ -19,6 +19,7 @@ tests/test_c_api
 site/
 .venv/
 __pycache__/
+doxyfile
 
 # Editor and OS files
 .DS_Store
