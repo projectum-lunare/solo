@@ -66,7 +66,11 @@ All subsystems share a unified canonical type foundation (`include/solo/types.h`
 - Synchronous and asynchronous operation modes (`sock:set_mode`, `sock:set_blocking`, `sock:set_timeout`).
 - TCP client connections (`solo.socket.connect`), server binding (`solo.socket.bind`), and client acceptance (`sock:accept`).
 - UDP datagram sockets (`solo.socket.udp`, `solo.socket.udp_bind`), datagram transmission (`sock:sendto`), and reception with sender addressing (`sock:recvfrom`).
-- Asynchronous multiplexing via `solo.socket.select` and single-socket readiness waiting (`sock:wait`).
+- Multiplexing beyond `select()` (`solo_socket_poll` in C, `solo.socket.select` in Lua):
+  - **Modern POSIX (`poll(2)`):** Native linear array multiplexing for Linux, FreeBSD, OpenBSD, NetBSD, macOS, and Solaris. Eliminates `FD_SETSIZE` (1024) limits and stack corruption risks when handling high descriptor values ($fd \ge 1024$).
+  - **Windows (NT 3.51 to 11):** Adaptive runtime multiplexer. Dynamically resolves `WSAPoll` via `GetProcAddress` on Windows Vista..11 / Server 2008..2025 without static DLL import table dependencies. On Windows NT 3.51, 4.0, 2000, and XP, automatically falls back to Winsock `select()` with `FD_SETSIZE` safely expanded to 1024 socket handles (an explicit array in Winsock, avoiding bitmask overflows).
+  - **Vintage Non-POSIX BSD Stacks:** Direct native BSD `select()` engine preserving full functionality on MS-DOS (WATT-32 `select_s`), AmigaOS (`bsdsocket.library`), Atari ST (MiNTNet), OS/2, and Plan 9.
+  - **Zero-Allocation Fast Path:** Stack-allocated 64-descriptor scratch buffer (`struct pollfd` / `WSAPOLLFD`) for common workloads, eliminating heap allocation on high-frequency I/O loops.
 - Backends: BSD Sockets (POSIX, macOS, Linux, BSD), Winsock 2 (Windows NT / CE), WATT-32 (MS-DOS 32-bit), `bsdsocket.library` (AmigaOS m68k), OS/2, Plan 9, KolibriOS.
 
 ### 6. `sandbox` — Kernel-Level Sandboxing

@@ -426,11 +426,32 @@ solo_socket_status_t solo_socket_backend_set_timeout(solo_socket_t *sock, int ti
     return SOLO_SOCK_OK;
 }
 
-int solo_socket_backend_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms)
+/* =============================================================================
+ * Polling & Event Multiplexing Engines
+ * ============================================================================= */
+
+/*
+ * -----------------------------------------------------------------------------
+ * 1. Universal select() Fallback Engine
+ * -----------------------------------------------------------------------------
+ * Used as:
+ * - Native multiplexer on vintage Non-POSIX BSD stacks:
+ *     - MS-DOS (WATT-32 select_s)
+ *     - AmigaOS (bsdsocket.library WaitSelect / select)
+ *     - OS/2 / ArcaOS (IBM TCP/IP os2_select)
+ *     - Atari ST (MiNTNet / TOS BSD socketlib)
+ * - Transparent fallback on Windows NT 3.51 / NT 4.0 / 2000 / XP when WSAPoll
+ *   is not present in WS2_32.DLL.
+ *
+ * NOTE ON WIN32 FD_SETSIZE:
+ * On Winsock, fd_set is an array of SOCKET handles with an explicit counter,
+ * NOT a bitmask. By redefining FD_SETSIZE to 1024 before <winsock2.h>, this
+ * fallback safely scales up to 1024 concurrent sockets even on Windows NT 3.51
+ * without stack buffer overflow.
+ */
+#if !SOLO_IS_POSIX || defined(SOLO_FORCE_SELECT)
+static int solo_poll_via_select(solo_pollfd_t *fds, size_t nfds, int timeout_ms)
 {
-#if defined(SOLO_PAL_HAS_CUSTOM_POLL)
-    return solo_pal_custom_poll(fds, nfds, timeout_ms);
-#else
     fd_set read_fds, write_fds, err_fds;
     SOLO_PAL_SOCK_T max_fd = 0;
     struct timeval tv;
@@ -511,5 +532,261 @@ int solo_socket_backend_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms)
     }
 
     return ready_count;
+}
+#endif
+
+#if SOLO_IS_POSIX
+/*
+ * -----------------------------------------------------------------------------
+ * 2. Modern POSIX poll(2) Engine
+ * -----------------------------------------------------------------------------
+ * Native implementation for POSIX.1-2001 operating systems (Linux, FreeBSD,
+ * OpenBSD, NetBSD, macOS / Darwin, Haiku, Solaris).
+ *
+ * ADVANTAGES OVER select():
+ * 1. Bypasses the fixed FD_SETSIZE ceiling: file descriptor IDs >= 1024 are
+ *    handled transparently without risking stack buffer corruption.
+ * 2. Linear O(nfds) array scanning without re-zeroing bitmasks on every tick.
+ * 3. Stack allocation optimization for small sets (<= 64 fds) to eliminate
+ *    dynamic memory allocation overhead on fast paths.
+ */
+static int solo_posix_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms)
+{
+    struct pollfd stack_pfds[64];
+    struct pollfd *pfds = stack_pfds;
+    size_t i;
+    int ret;
+    int ready_count = 0;
+
+    if (fds == NULL && nfds > 0) {
+        return SOLO_SOCK_ERROR;
+    }
+    if (nfds == 0) {
+        if (timeout_ms > 0) {
+            poll(NULL, 0, timeout_ms);
+        }
+        return 0;
+    }
+
+    if (nfds > sizeof(stack_pfds) / sizeof(stack_pfds[0])) {
+        pfds = (struct pollfd *)malloc(nfds * sizeof(struct pollfd));
+        if (pfds == NULL) {
+            return SOLO_SOCK_ERROR;
+        }
+    }
+
+    for (i = 0; i < nfds; i++) {
+        fds[i].revents = 0;
+        if (fds[i].sock != NULL && SOLO_SOCK_IS_VALID(fds[i].sock)) {
+            pfds[i].fd = fds[i].sock->fd;
+            pfds[i].events = 0;
+            if (fds[i].events & SOLO_SOCK_POLL_READ) {
+                pfds[i].events |= POLLIN;
+            }
+            if (fds[i].events & SOLO_SOCK_POLL_WRITE) {
+                pfds[i].events |= POLLOUT;
+            }
+        } else {
+            /* POSIX poll() ignores entries with negative fd and sets revents = 0 */
+            pfds[i].fd = -1;
+            pfds[i].events = 0;
+        }
+        pfds[i].revents = 0;
+    }
+
+    while (1) {
+        ret = poll(pfds, (nfds_t)nfds, timeout_ms);
+        if (ret < 0) {
+            if (SOLO_PAL_IS_INTR(errno)) {
+                continue;
+            }
+            if (pfds != stack_pfds) {
+                free(pfds);
+            }
+            return SOLO_SOCK_ERROR;
+        }
+        break;
+    }
+
+    if (ret > 0) {
+        for (i = 0; i < nfds; i++) {
+            if (pfds[i].fd >= 0 && pfds[i].revents != 0) {
+                if (pfds[i].revents & (POLLIN | POLLPRI)) {
+                    fds[i].revents |= SOLO_SOCK_POLL_READ;
+                }
+                if (pfds[i].revents & POLLOUT) {
+                    fds[i].revents |= SOLO_SOCK_POLL_WRITE;
+                }
+                if (pfds[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                    fds[i].revents |= SOLO_SOCK_POLL_ERR;
+                }
+                if (fds[i].revents != 0) {
+                    ready_count++;
+                }
+            }
+        }
+    }
+
+    if (pfds != stack_pfds) {
+        free(pfds);
+    }
+    return ready_count;
+}
+
+#elif SOLO_IS_WINDOWS
+/*
+ * -----------------------------------------------------------------------------
+ * 3. Windows Adaptive WSAPoll / select() Engine
+ * -----------------------------------------------------------------------------
+ * Seamlessly bridges Windows NT 3.51 (1995) to modern Windows 11 (2026).
+ *
+ * CRITICAL VINTAGE NT COMPATIBILITY:
+ * WSAPoll was introduced in Windows Vista (NT 6.0). Calling WSAPoll statically
+ * would bake an import table reference to WS2_32.DLL that prevents the PE
+ * loader on Windows NT 3.51, NT 4.0, 2000, and XP from even starting the executable!
+ *
+ * SOLUTION:
+ * We resolve WSAPoll dynamically via GetProcAddress:
+ * - On Windows Vista..11 / Server 2008..2025: WSAPoll is resolved and invoked.
+ * - On Windows NT 3.51..XP: GetProcAddress returns NULL and we fall back to
+ *   solo_poll_via_select(), with FD_SETSIZE expanded to 1024.
+ */
+
+#define SOLO_WSA_POLLRDNORM 0x0100
+#define SOLO_WSA_POLLRDBAND 0x0200
+#define SOLO_WSA_POLLIN     (SOLO_WSA_POLLRDNORM | SOLO_WSA_POLLRDBAND)
+#define SOLO_WSA_POLLPRI    0x0400
+#define SOLO_WSA_POLLWRNORM 0x0010
+#define SOLO_WSA_POLLOUT    (SOLO_WSA_POLLWRNORM)
+#define SOLO_WSA_POLLERR    0x0001
+#define SOLO_WSA_POLLHUP    0x0002
+#define SOLO_WSA_POLLNVAL   0x0004
+
+/* Exact memory ABI structure matching Winsock2 WSAPOLLFD across x86/x64/ARM */
+typedef struct solo_wsapollfd {
+    SOCKET fd;
+    short  events;
+    short  revents;
+} solo_wsapollfd_t;
+
+typedef int (WSAAPI *solo_pfn_wsapoll_t)(solo_wsapollfd_t *fdArray, ULONG fds, INT timeout);
+
+static solo_pfn_wsapoll_t s_pfn_WSAPoll = NULL;
+static int s_wsapoll_probed = 0;
+
+static void solo_win32_probe_wsapoll(void)
+{
+    if (!s_wsapoll_probed) {
+        HMODULE hws2 = GetModuleHandleA("ws2_32.dll");
+        if (hws2 != NULL) {
+            s_pfn_WSAPoll = (solo_pfn_wsapoll_t)GetProcAddress(hws2, "WSAPoll");
+        }
+        s_wsapoll_probed = 1;
+    }
+}
+
+static int solo_win32_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms)
+{
+    solo_wsapollfd_t stack_pfds[64];
+    solo_wsapollfd_t *pfds = stack_pfds;
+    size_t i;
+    int ret;
+    int ready_count = 0;
+
+    solo_win32_probe_wsapoll();
+
+    /* If WSAPoll is unavailable (WinNT 3.51 / 4.0 / 2000 / XP), use select() */
+    if (s_pfn_WSAPoll == NULL) {
+        return solo_poll_via_select(fds, nfds, timeout_ms);
+    }
+
+    if (fds == NULL && nfds > 0) {
+        return SOLO_SOCK_ERROR;
+    }
+    if (nfds == 0) {
+        if (timeout_ms > 0) {
+            Sleep((DWORD)timeout_ms);
+        }
+        return 0;
+    }
+
+    if (nfds > sizeof(stack_pfds) / sizeof(stack_pfds[0])) {
+        pfds = (solo_wsapollfd_t *)malloc(nfds * sizeof(solo_wsapollfd_t));
+        if (pfds == NULL) {
+            return SOLO_SOCK_ERROR;
+        }
+    }
+
+    for (i = 0; i < nfds; i++) {
+        fds[i].revents = 0;
+        if (fds[i].sock != NULL && SOLO_SOCK_IS_VALID(fds[i].sock)) {
+            pfds[i].fd = fds[i].sock->fd;
+            pfds[i].events = 0;
+            if (fds[i].events & SOLO_SOCK_POLL_READ) {
+                pfds[i].events |= SOLO_WSA_POLLIN;
+            }
+            if (fds[i].events & SOLO_SOCK_POLL_WRITE) {
+                pfds[i].events |= SOLO_WSA_POLLOUT;
+            }
+        } else {
+            pfds[i].fd = INVALID_SOCKET;
+            pfds[i].events = 0;
+        }
+        pfds[i].revents = 0;
+    }
+
+    while (1) {
+        ret = s_pfn_WSAPoll(pfds, (ULONG)nfds, timeout_ms);
+        if (ret < 0) {
+            int err = WSAGetLastError();
+            if (SOLO_PAL_IS_INTR(err)) {
+                continue;
+            }
+            if (pfds != stack_pfds) {
+                free(pfds);
+            }
+            return SOLO_SOCK_ERROR;
+        }
+        break;
+    }
+
+    if (ret > 0) {
+        for (i = 0; i < nfds; i++) {
+            if (pfds[i].fd != INVALID_SOCKET && pfds[i].revents != 0) {
+                if (pfds[i].revents & (SOLO_WSA_POLLIN | SOLO_WSA_POLLPRI)) {
+                    fds[i].revents |= SOLO_SOCK_POLL_READ;
+                }
+                if (pfds[i].revents & SOLO_WSA_POLLOUT) {
+                    fds[i].revents |= SOLO_SOCK_POLL_WRITE;
+                }
+                if (pfds[i].revents & (SOLO_WSA_POLLERR | SOLO_WSA_POLLHUP | SOLO_WSA_POLLNVAL)) {
+                    fds[i].revents |= SOLO_SOCK_POLL_ERR;
+                }
+                if (fds[i].revents != 0) {
+                    ready_count++;
+                }
+            }
+        }
+    }
+
+    if (pfds != stack_pfds) {
+        free(pfds);
+    }
+    return ready_count;
+}
+#endif
+
+int solo_socket_backend_poll(solo_pollfd_t *fds, size_t nfds, int timeout_ms)
+{
+#if defined(SOLO_PAL_HAS_CUSTOM_POLL)
+    return solo_pal_custom_poll(fds, nfds, timeout_ms);
+#elif SOLO_IS_WINDOWS
+    return solo_win32_poll(fds, nfds, timeout_ms);
+#elif SOLO_IS_POSIX
+    return solo_posix_poll(fds, nfds, timeout_ms);
+#elif SOLO_IS_DOS || SOLO_IS_AMIGA || SOLO_IS_OS2 || SOLO_IS_ATARIST
+    return solo_poll_via_select(fds, nfds, timeout_ms);
+#else
+    return solo_poll_via_select(fds, nfds, timeout_ms);
 #endif
 }

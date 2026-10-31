@@ -18,9 +18,19 @@
 #include <stddef.h>
 
 /* =============================================================================
- * 1. Windows (WinNT, WinCE, MinGW, MSVC)
+ * 1. Windows (WinNT 3.51+, WinCE, MinGW, MSVC)
  * ============================================================================= */
 #if SOLO_IS_WINDOWS
+
+/*
+ * Redefine FD_SETSIZE before including Winsock headers.
+ * On Winsock (since NT 3.51), fd_set is an array of SOCKET handles, not a bitmask.
+ * Redefining FD_SETSIZE to 1024 expands the capacity of the select() fallback
+ * to 1024 sockets without buffer overflows or ABI breakage on vintage NT systems.
+ */
+#ifndef FD_SETSIZE
+#define FD_SETSIZE 1024
+#endif
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -477,6 +487,7 @@ static void solo_pal_strerror(int err, char *err_buf, size_t err_cap)
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <sys/time.h>
+#include <poll.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
