@@ -15,6 +15,11 @@ build/
 # Test binaries
 tests/test_c_api
 
+# Documentation & Python virtual environments
+site/
+.venv/
+__pycache__/
+
 # Editor and OS files
 .DS_Store
 .idea/

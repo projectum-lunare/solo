@@ -215,6 +215,21 @@ xmake run solo_smoke
 xmake clean
 ```
 
+### 📚 Documentation
+
+The documentation is built with [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/):
+
+```bash
+# Install documentation dependencies:
+pip install -r requirements-docs.txt
+
+# Start local live-reload documentation server:
+mkdocs serve
+
+# Build static production site:
+mkdocs build
+```
+
 ### Modular Targets & Submodules
 
 `solo` builds both an umbrella library (`libsolo.a` / `solo.so`) and independent, zero-dependency submodules that can be required in Lua without overhead:
