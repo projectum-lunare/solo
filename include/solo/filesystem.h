@@ -46,19 +46,25 @@ typedef enum {
     SOLO_FS_TYPE_SOCKET    = 6
 } solo_fs_type_t;
 
+/**
+ * @brief File or directory metadata status structure.
+ */
 typedef struct solo_fs_stat {
-    solo_fs_type_t type;
-    solo_fsize_t   size;         /* File size in bytes */
-    long           mtime;        /* Modification timestamp (epoch seconds) */
-    long           atime;        /* Last access timestamp (epoch seconds) */
-    long           ctime;        /* Status change / creation timestamp */
-    int            mode;         /* Permission bits (POSIX octal mode flags) */
-    solo_bool_t    is_readonly;  /* SOLO_TRUE if read-only attribute is set, SOLO_FALSE otherwise */
+    solo_fs_type_t type;         /**< Node kind (regular file, directory, symlink, etc.) */
+    solo_fsize_t   size;         /**< File size in bytes (64-bit on supported platforms) */
+    long           mtime;        /**< Last modification timestamp (epoch seconds) */
+    long           atime;        /**< Last access timestamp (epoch seconds) */
+    long           ctime;        /**< Status change or file creation timestamp (epoch seconds) */
+    int            mode;         /**< Permission bits (POSIX octal mode flags, e.g. 0644) */
+    solo_bool_t    is_readonly;  /**< SOLO_TRUE if read-only attribute is set, SOLO_FALSE otherwise */
 } solo_fs_stat_t;
 
+/**
+ * @brief Directory entry structure yielded during directory traversal.
+ */
 typedef struct solo_fs_dirent {
-    char           name[256];
-    solo_fs_type_t type;
+    char           name[256];    /**< Null-terminated entry filename (basename) */
+    solo_fs_type_t type;         /**< Node kind of entry (file, directory, symlink, etc.) */
 } solo_fs_dirent_t;
 
 typedef struct solo_fs_dir solo_fs_dir_t;

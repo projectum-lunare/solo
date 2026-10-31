@@ -356,10 +356,17 @@ solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms
     return SOLO_SERIAL_OK;
 }
 
+static unsigned long get_monotonic_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ((unsigned long)ts.tv_sec * 1000UL) + ((unsigned long)ts.tv_nsec / 1000000UL);
+}
+
 solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len, size_t *written_bytes)
 {
     size_t total_written = 0;
-    long long deadline_ms = 0;
+    unsigned long deadline_ms = 0;
     int has_timeout = 0;
 
     if (written_bytes != NULL) {
@@ -376,9 +383,7 @@ solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len
     if (port->timeout_ms >= 0) {
         has_timeout = 1;
         if (port->timeout_ms > 0) {
-            struct timespec ts;
-            clock_gettime(CLOCK_MONOTONIC, &ts);
-            deadline_ms = (long long)ts.tv_sec * 1000LL + (ts.tv_nsec / 1000000LL) + port->timeout_ms;
+            deadline_ms = get_monotonic_ms() + (unsigned long)port->timeout_ms;
         }
     }
 
@@ -390,10 +395,7 @@ solo_status_t solo_serial_write(solo_serial_t *port, const char *buf, size_t len
             int poll_timeout = 0;
 
             if (port->timeout_ms > 0) {
-                struct timespec ts;
-                long long now_ms;
-                clock_gettime(CLOCK_MONOTONIC, &ts);
-                now_ms = (long long)ts.tv_sec * 1000LL + (ts.tv_nsec / 1000000LL);
+                unsigned long now_ms = get_monotonic_ms();
                 if (now_ms >= deadline_ms) {
                     /* Total deadline expired */
                     if (written_bytes != NULL) {
@@ -478,25 +480,20 @@ solo_status_t solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, s
     if (eff_timeout >= 0) {
         struct pollfd pfd;
         int pr;
-        long long deadline_ms = 0;
+        unsigned long deadline_ms = 0;
 
         pfd.fd = port->fd;
         pfd.events = POLLIN;
         pfd.revents = 0;
 
         if (eff_timeout > 0) {
-            struct timespec ts;
-            clock_gettime(CLOCK_MONOTONIC, &ts);
-            deadline_ms = (long long)ts.tv_sec * 1000LL + (ts.tv_nsec / 1000000LL) + eff_timeout;
+            deadline_ms = get_monotonic_ms() + (unsigned long)eff_timeout;
         }
 
         while (1) {
             int current_timeout = 0;
             if (eff_timeout > 0) {
-                struct timespec ts;
-                long long now_ms;
-                clock_gettime(CLOCK_MONOTONIC, &ts);
-                now_ms = (long long)ts.tv_sec * 1000LL + (ts.tv_nsec / 1000000LL);
+                unsigned long now_ms = get_monotonic_ms();
                 if (now_ms >= deadline_ms) {
                     return SOLO_AGAIN; /* Deadline expired: timeout */
                 }

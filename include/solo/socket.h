@@ -112,10 +112,13 @@ solo_socket_status_t solo_socket_recvfrom(solo_socket_t *sock, char *buf, size_t
  * Mode, Timeout & Polling
  * On error, functions accepting err_buf return SOLO_SOCK_ERROR and populate err_buf if provided.
  */
+/**
+ * @brief Polling descriptor structure for multi-socket event multiplexing.
+ */
 typedef struct solo_pollfd {
-    solo_socket_t *sock;
-    int events;      /* Input:  SOLO_SOCK_POLL_READ | SOLO_SOCK_POLL_WRITE */
-    int revents;     /* Output: SOLO_SOCK_POLL_READ | SOLO_SOCK_POLL_WRITE | SOLO_SOCK_POLL_ERR */
+    solo_socket_t *sock;     /**< Pointer to active socket to poll */
+    int            events;   /**< Bitmask of requested input events (SOLO_SOCK_POLL_READ, SOLO_SOCK_POLL_WRITE) */
+    int            revents;  /**< Bitmask of returned output events detected by solo_socket_poll() */
 } solo_pollfd_t;
 
 solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char *err_buf, size_t err_cap);

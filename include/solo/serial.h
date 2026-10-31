@@ -88,15 +88,18 @@ typedef solo_line_state_t solo_serial_line_state_t;
 #define SOLO_SERIAL_LINE_LOW   SOLO_LINE_LOW
 #define SOLO_SERIAL_LINE_HIGH  SOLO_LINE_HIGH
 
-typedef struct {
-    int baud;         /* solo_serial_baud_t or integer (e.g. 9600, 115200) */
-    int data_bits;    /* solo_serial_data_bits_t (5, 6, 7, 8) */
-    char parity;      /* solo_serial_parity_t ('n', 'e', 'o', 'm', 's') */
-    int stop_bits;    /* solo_serial_stop_bits_t (1, 2) */
-    int flow_control; /* solo_serial_flow_t (0: none, 1: hardware RTS/CTS, 2: software XON/XOFF) */
-    int rts;          /* solo_serial_line_t (-1: ignore, 0: off/clear, 1: on/set) */
-    int dtr;          /* solo_serial_line_t (-1: ignore, 0: off/clear, 1: on/set) */
-    int timeout_ms;   /* Read/write timeout: 0 = non-blocking, >0 = timeout in ms, <0 = blocking indefinitely */
+/**
+ * @brief Configuration options for opening a serial UART port.
+ */
+typedef struct solo_serial_opts {
+    int  baud;         /**< Baud rate (e.g. 9600, 115200, or solo_serial_baud_t) */
+    int  data_bits;    /**< Data bits length: 5, 6, 7, or 8 (solo_serial_data_bits_t) */
+    char parity;       /**< Parity scheme: 'n' (none), 'e' (even), 'o' (odd), 'm' (mark), 's' (space) */
+    int  stop_bits;    /**< Stop bits count: 1 or 2 (solo_serial_stop_bits_t) */
+    int  flow_control; /**< Flow control mode: 0 (none), 1 (RTS/CTS hardware), 2 (XON/XOFF software) */
+    int  rts;          /**< Initial RTS line state: -1 (ignore), 0 (low/clear), 1 (high/set) */
+    int  dtr;          /**< Initial DTR line state: -1 (ignore), 0 (low/clear), 1 (high/set) */
+    int  timeout_ms;   /**< I/O timeout: <0 (blocking indefinitely), 0 (non-blocking), >0 (timeout in ms) */
 } solo_serial_opts_t;
 
 /*

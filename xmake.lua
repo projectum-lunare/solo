@@ -309,6 +309,11 @@ target("test_lua")
         "solo.socket",
         "solo.sandbox"
     )
+    on_test(function (target)
+        os.execv(path.join(os.projectdir(), "build/bin/test_lua"))
+        return true
+    end)
+    add_tests("lua_suite")
 
 end -- is_plat(host)
 

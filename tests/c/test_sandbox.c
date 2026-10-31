@@ -112,6 +112,7 @@ TEST test_sandbox_fork(void)
 {
 #if SOLO_IS_LINUX
     int version = 0;
+    int status = 0;
     solo_sandbox_backend_t b = solo_sandbox_backend(&version);
 
     /* Only run live enforcement if Landlock is actively supported by the host kernel */
@@ -157,7 +158,7 @@ TEST test_sandbox_fork(void)
         }
 
         /* --- PARENT PROCESS --- */
-        int status = 0;
+        status = 0;
         waitpid(pid, &status, 0);
         ASSERT(WIFEXITED(status));
         ASSERT_EQ(0, WEXITSTATUS(status));
@@ -182,6 +183,7 @@ TEST test_sandbox_lock_without_unveil_fork(void)
 {
 #if SOLO_IS_LINUX
     int version = 0;
+    int status = 0;
     solo_sandbox_backend_t b = solo_sandbox_backend(&version);
 
     if (b == SOLO_SANDBOX_BACKEND_LANDLOCK && version > 0) {
@@ -212,7 +214,7 @@ TEST test_sandbox_lock_without_unveil_fork(void)
         }
 
         /* --- PARENT PROCESS --- */
-        int status = 0;
+        status = 0;
         waitpid(pid, &status, 0);
         ASSERT(WIFEXITED(status));
         ASSERT_EQ(0, WEXITSTATUS(status));
