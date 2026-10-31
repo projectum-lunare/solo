@@ -6,6 +6,7 @@
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-blue.svg)](https://mozilla.org/MPL/2.0/)
 [![Language: ANSI C89 / GNU89](https://img.shields.io/badge/C-ANSI_C89_%2F_GNU89-brightgreen.svg)]()
 [![Lua: 5.4-5.5](https://img.shields.io/badge/Lua-5.4_--_5.5-blue.svg)]()
+[![Documentation](https://img.shields.io/badge/Docs-Online-blueviolet.svg)](https://projectum-lunare.github.io/solo/)
 
 `solo` is a portable, zero-bloat system foundation library featuring public C headers and core interfaces designed for strict ANSI C (C89 / ISO C90) interoperability, with implementations and vintage drivers targeting `gnu89` (leveraging standard platform runtime features like `vsnprintf` and GCC extensions such as `__asm__`, struct alignment, and register calling conventions). It bridges hardware I/O, network communication, physical ports, persistent filesystems, and kernel-level sandboxing across **10 distinct operating system families** — from vintage platforms of the 1990s (DOS, Amiga, Windows CE, Atari ST) to modern POSIX workstations in 2026.
 
@@ -217,7 +218,10 @@ xmake clean
 
 ### 📚 Documentation
 
-The documentation is built with [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/):
+The official documentation is available online at:  
+👉 **[https://projectum-lunare.github.io/solo/](https://projectum-lunare.github.io/solo/)**
+
+To build and serve the documentation locally using [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/):
 
 ```bash
 # Install documentation dependencies:
