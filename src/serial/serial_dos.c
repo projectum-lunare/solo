@@ -319,35 +319,35 @@ solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms
     return SOLO_SERIAL_OK;
 }
 
-int solo_serial_get_cts(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cts(solo_serial_t *port)
 {
-    if (port == NULL) return -1;
-    return (inp(port->base_io + 6) & 0x10) ? 1 : 0;
+    if (port == NULL) return SOLO_LINE_ERROR;
+    return (inp(port->base_io + 6) & 0x10) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_get_dsr(solo_serial_t *port)
+solo_line_state_t solo_serial_get_dsr(solo_serial_t *port)
 {
-    if (port == NULL) return -1;
-    return (inp(port->base_io + 6) & 0x20) ? 1 : 0;
+    if (port == NULL) return SOLO_LINE_ERROR;
+    return (inp(port->base_io + 6) & 0x20) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_get_ri(solo_serial_t *port)
+solo_line_state_t solo_serial_get_ri(solo_serial_t *port)
 {
-    if (port == NULL) return -1;
-    return (inp(port->base_io + 6) & 0x40) ? 1 : 0;
+    if (port == NULL) return SOLO_LINE_ERROR;
+    return (inp(port->base_io + 6) & 0x40) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_get_cd(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cd(solo_serial_t *port)
 {
-    if (port == NULL) return -1;
-    return (inp(port->base_io + 6) & 0x80) ? 1 : 0;
+    if (port == NULL) return SOLO_LINE_ERROR;
+    return (inp(port->base_io + 6) & 0x80) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_drain(solo_serial_t *port)
+solo_serial_status_t solo_serial_drain(solo_serial_t *port)
 {
     int timeout = 100000;
     if (port == NULL)
-        return -1;
+        return SOLO_SERIAL_ERROR;
 
     if (port->fd >= 0) {
         _commit(port->fd);
@@ -357,7 +357,7 @@ int solo_serial_drain(solo_serial_t *port)
     while ((inp(port->base_io + 5) & 0x40) == 0 && --timeout > 0) {
         /* spin wait */
     }
-    return (timeout > 0) ? 0 : -1;
+    return (timeout > 0) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
 void solo_serial_close(solo_serial_t *port)

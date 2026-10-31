@@ -15,19 +15,23 @@
 
 TEST test_filesystem_existence(void)
 {
+    /* Canonical boolean constants verification */
+    ASSERT_EQ(0, SOLO_FALSE);
+    ASSERT_EQ(1, SOLO_TRUE);
+
     /* 1. Current working directory */
-    ASSERT_EQ(1, solo_fs_exists("."));
+    ASSERT_EQ(SOLO_TRUE, solo_fs_exists("."));
 
     /* 2. Known project header file */
-    ASSERT_EQ(1, solo_fs_exists("include/solo/solo.h"));
+    ASSERT_EQ(SOLO_TRUE, solo_fs_exists("include/solo/solo.h"));
 
     /* 3. Nonexistent absolute and relative paths */
-    ASSERT_EQ(0, solo_fs_exists("/nonexistent_solo_xyz_12345"));
-    ASSERT_EQ(0, solo_fs_exists("nonexistent_relative_xyz_67890"));
+    ASSERT_EQ(SOLO_FALSE, solo_fs_exists("/nonexistent_solo_xyz_12345"));
+    ASSERT_EQ(SOLO_FALSE, solo_fs_exists("nonexistent_relative_xyz_67890"));
 
     /* 4. NULL and empty defense */
-    ASSERT_EQ(0, solo_fs_exists(NULL));
-    ASSERT_EQ(0, solo_fs_exists(""));
+    ASSERT_EQ(SOLO_FALSE, solo_fs_exists(NULL));
+    ASSERT_EQ(SOLO_FALSE, solo_fs_exists(""));
 
     PASS();
 }
@@ -68,8 +72,8 @@ TEST test_filesystem_path_algebra(void)
     ASSERT(strstr(out, "d") != NULL);
 
     /* Path absolute */
-    ASSERT(solo_fs_path_is_absolute("/usr/local") == 1);
-    ASSERT(solo_fs_path_is_absolute("relative/path") == 0);
+    ASSERT_EQ(SOLO_TRUE, solo_fs_path_is_absolute("/usr/local"));
+    ASSERT_EQ(SOLO_FALSE, solo_fs_path_is_absolute("relative/path"));
 
     PASS();
 }
@@ -85,13 +89,13 @@ TEST test_filesystem_stat_and_predicates(void)
     ASSERT_EQ(SOLO_FS_TYPE_FILE, st.type);
     ASSERT(st.size > 0);
 
-    ASSERT_EQ(1, solo_fs_is_file("include/solo/solo.h"));
-    ASSERT_EQ(0, solo_fs_is_dir("include/solo/solo.h"));
+    ASSERT_EQ(SOLO_TRUE, solo_fs_is_file("include/solo/solo.h"));
+    ASSERT_EQ(SOLO_FALSE, solo_fs_is_dir("include/solo/solo.h"));
 
     ASSERT_EQ(SOLO_OK, solo_fs_stat("src", &st, err, sizeof(err)));
     ASSERT_EQ(SOLO_FS_TYPE_DIR, st.type);
-    ASSERT_EQ(1, solo_fs_is_dir("src"));
-    ASSERT_EQ(0, solo_fs_is_file("src"));
+    ASSERT_EQ(SOLO_TRUE, solo_fs_is_dir("src"));
+    ASSERT_EQ(SOLO_FALSE, solo_fs_is_file("src"));
 
     ASSERT_EQ(SOLO_OK, solo_fs_file_size("include/solo/solo.h", &sz));
     ASSERT(sz > 0);
@@ -111,11 +115,11 @@ TEST test_filesystem_mutation_and_iteration(void)
     /* 1. Recursive mkdir */
     err[0] = '\0';
     ASSERT_EQ(SOLO_OK, solo_fs_mkdir_p("build/test_fs_c/nested/deep", 0777, err, sizeof(err)));
-    ASSERT_EQ(1, solo_fs_is_dir("build/test_fs_c/nested/deep"));
+    ASSERT_EQ(SOLO_TRUE, solo_fs_is_dir("build/test_fs_c/nested/deep"));
 
     /* 2. Write file */
     ASSERT_EQ(SOLO_OK, solo_fs_write_file("build/test_fs_c/nested/deep/item.txt", "hello", 5, err, sizeof(err)));
-    ASSERT_EQ(1, solo_fs_is_file("build/test_fs_c/nested/deep/item.txt"));
+    ASSERT_EQ(SOLO_TRUE, solo_fs_is_file("build/test_fs_c/nested/deep/item.txt"));
 
     /* 3. Append file */
     ASSERT_EQ(SOLO_OK, solo_fs_append_file("build/test_fs_c/nested/deep/item.txt", " world", 6, err, sizeof(err)));
@@ -128,14 +132,14 @@ TEST test_filesystem_mutation_and_iteration(void)
 
     /* 5. Copy file */
     ASSERT_EQ(SOLO_OK, solo_fs_copy_file("build/test_fs_c/nested/deep/item.txt",
-                                         "build/test_fs_c/nested/deep/copy.txt", 1, err, sizeof(err)));
-    ASSERT_EQ(1, solo_fs_is_file("build/test_fs_c/nested/deep/copy.txt"));
+                                         "build/test_fs_c/nested/deep/copy.txt", SOLO_TRUE, err, sizeof(err)));
+    ASSERT_EQ(SOLO_TRUE, solo_fs_is_file("build/test_fs_c/nested/deep/copy.txt"));
 
     /* 6. Rename file */
     ASSERT_EQ(SOLO_OK, solo_fs_rename("build/test_fs_c/nested/deep/copy.txt",
                                       "build/test_fs_c/nested/deep/renamed.txt", err, sizeof(err)));
-    ASSERT_EQ(0, solo_fs_exists("build/test_fs_c/nested/deep/copy.txt"));
-    ASSERT_EQ(1, solo_fs_exists("build/test_fs_c/nested/deep/renamed.txt"));
+    ASSERT_EQ(SOLO_FALSE, solo_fs_exists("build/test_fs_c/nested/deep/copy.txt"));
+    ASSERT_EQ(SOLO_TRUE, solo_fs_exists("build/test_fs_c/nested/deep/renamed.txt"));
 
     /* 7. Directory iteration */
     dir = solo_fs_dir_open("build/test_fs_c/nested/deep", err, sizeof(err));
@@ -152,7 +156,7 @@ TEST test_filesystem_mutation_and_iteration(void)
 
     /* 8. Remove all */
     ASSERT_EQ(SOLO_OK, solo_fs_remove_all("build/test_fs_c", err, sizeof(err)));
-    ASSERT_EQ(0, solo_fs_exists("build/test_fs_c"));
+    ASSERT_EQ(SOLO_FALSE, solo_fs_exists("build/test_fs_c"));
 
     PASS();
 }
@@ -187,7 +191,7 @@ TEST test_filesystem_file_stream(void)
     solo_file_close(f);
 
     ASSERT_EQ(SOLO_OK, solo_fs_remove("build/test_c_stream.bin", err, sizeof(err)));
-    ASSERT_EQ(0, solo_fs_exists("build/test_c_stream.bin"));
+    ASSERT_EQ(SOLO_FALSE, solo_fs_exists("build/test_c_stream.bin"));
 
     PASS();
 }

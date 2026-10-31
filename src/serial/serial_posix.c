@@ -279,71 +279,71 @@ solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t
 #endif
 }
 
-int solo_serial_get_cts(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cts(solo_serial_t *port)
 {
 #if defined(TIOCMGET) && defined(TIOCM_CTS)
     int status;
     if (port == NULL || port->fd < 0)
-        return -1;
+        return SOLO_LINE_ERROR;
     if (ioctl(port->fd, TIOCMGET, &status) != 0)
-        return -1;
-    return (status & TIOCM_CTS) ? 1 : 0;
+        return SOLO_LINE_ERROR;
+    return (status & TIOCM_CTS) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 #else
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 #endif
 }
 
-int solo_serial_get_dsr(solo_serial_t *port)
+solo_line_state_t solo_serial_get_dsr(solo_serial_t *port)
 {
 #if defined(TIOCMGET) && defined(TIOCM_DSR)
     int status;
     if (port == NULL || port->fd < 0)
-        return -1;
+        return SOLO_LINE_ERROR;
     if (ioctl(port->fd, TIOCMGET, &status) != 0)
-        return -1;
-    return (status & TIOCM_DSR) ? 1 : 0;
+        return SOLO_LINE_ERROR;
+    return (status & TIOCM_DSR) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 #else
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 #endif
 }
 
-int solo_serial_get_cd(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cd(solo_serial_t *port)
 {
 #if defined(TIOCMGET) && (defined(TIOCM_CD) || defined(TIOCM_CAR))
     int status;
     if (port == NULL || port->fd < 0)
-        return -1;
+        return SOLO_LINE_ERROR;
     if (ioctl(port->fd, TIOCMGET, &status) != 0)
-        return -1;
+        return SOLO_LINE_ERROR;
 #if defined(TIOCM_CD)
-    return (status & TIOCM_CD) ? 1 : 0;
+    return (status & TIOCM_CD) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 #else
-    return (status & TIOCM_CAR) ? 1 : 0;
+    return (status & TIOCM_CAR) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 #endif
 #else
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 #endif
 }
 
-int solo_serial_get_ri(solo_serial_t *port)
+solo_line_state_t solo_serial_get_ri(solo_serial_t *port)
 {
 #if defined(TIOCMGET) && (defined(TIOCM_RI) || defined(TIOCM_RNG))
     int status;
     if (port == NULL || port->fd < 0)
-        return -1;
+        return SOLO_LINE_ERROR;
     if (ioctl(port->fd, TIOCMGET, &status) != 0)
-        return -1;
+        return SOLO_LINE_ERROR;
 #if defined(TIOCM_RI)
-    return (status & TIOCM_RI) ? 1 : 0;
+    return (status & TIOCM_RI) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 #else
-    return (status & TIOCM_RNG) ? 1 : 0;
+    return (status & TIOCM_RNG) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 #endif
 #else
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 #endif
 }
 
@@ -536,12 +536,12 @@ solo_status_t solo_serial_read(solo_serial_t *port, char *buf, size_t max_len, s
     return SOLO_OK;
 }
 
-int solo_serial_drain(solo_serial_t *port)
+solo_serial_status_t solo_serial_drain(solo_serial_t *port)
 {
     if (port == NULL || port->fd < 0) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
-    return tcdrain(port->fd);
+    return (tcdrain(port->fd) == 0) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
 void solo_serial_close(solo_serial_t *port)

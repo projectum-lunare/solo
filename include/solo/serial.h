@@ -82,6 +82,12 @@ typedef enum {
     SOLO_SERIAL_LINE_ON     =  1
 } solo_serial_line_t;
 
+/* Backward-compatible hardware signal line aliases */
+typedef solo_line_state_t solo_serial_line_state_t;
+#define SOLO_SERIAL_LINE_ERROR SOLO_LINE_ERROR
+#define SOLO_SERIAL_LINE_LOW   SOLO_LINE_LOW
+#define SOLO_SERIAL_LINE_HIGH  SOLO_LINE_HIGH
+
 typedef struct {
     int baud;         /* solo_serial_baud_t or integer (e.g. 9600, 115200) */
     int data_bits;    /* solo_serial_data_bits_t (5, 6, 7, 8) */
@@ -135,8 +141,9 @@ solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms
 
 /*
  * Waits for the UART transmit buffer to drain completely (hardware drain).
+ * Returns SOLO_SERIAL_OK on success, or SOLO_SERIAL_ERROR on failure.
  */
-int solo_serial_drain(solo_serial_t *port);
+solo_serial_status_t solo_serial_drain(solo_serial_t *port);
 
 /*
  * Controls the RTS and DTR modem lines of the UART.
@@ -148,13 +155,13 @@ solo_serial_status_t solo_serial_set_dtr(solo_serial_t *port, solo_serial_line_t
 
 /*
  * Queries the modem input lines (CTS, DSR, CD/DCD, RI).
- * Returns 1 if asserted/high, 0 if deasserted/low,
- * or -1 on error or if unsupported.
+ * Returns SOLO_LINE_HIGH if asserted/high, SOLO_LINE_LOW if deasserted/low,
+ * or SOLO_LINE_ERROR on error or if unsupported.
  */
-int solo_serial_get_cts(solo_serial_t *port);
-int solo_serial_get_dsr(solo_serial_t *port);
-int solo_serial_get_cd(solo_serial_t *port);
-int solo_serial_get_ri(solo_serial_t *port);
+solo_line_state_t solo_serial_get_cts(solo_serial_t *port);
+solo_line_state_t solo_serial_get_dsr(solo_serial_t *port);
+solo_line_state_t solo_serial_get_cd(solo_serial_t *port);
+solo_line_state_t solo_serial_get_ri(solo_serial_t *port);
 
 /*
  * Closes the serial port and frees allocated resources.

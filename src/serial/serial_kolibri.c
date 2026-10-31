@@ -393,37 +393,37 @@ solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms
     return SOLO_SERIAL_OK;
 }
 
-int solo_serial_get_cts(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cts(solo_serial_t *port)
 {
-    if (port == NULL || port->base == 0) return -1;
-    return (inb(port->base + 6) & 0x10) ? 1 : 0;
+    if (port == NULL || port->base == 0) return SOLO_LINE_ERROR;
+    return (inb(port->base + 6) & 0x10) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_get_dsr(solo_serial_t *port)
+solo_line_state_t solo_serial_get_dsr(solo_serial_t *port)
 {
-    if (port == NULL || port->base == 0) return -1;
-    return (inb(port->base + 6) & 0x20) ? 1 : 0;
+    if (port == NULL || port->base == 0) return SOLO_LINE_ERROR;
+    return (inb(port->base + 6) & 0x20) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_get_ri(solo_serial_t *port)
+solo_line_state_t solo_serial_get_ri(solo_serial_t *port)
 {
-    if (port == NULL || port->base == 0) return -1;
-    return (inb(port->base + 6) & 0x40) ? 1 : 0;
+    if (port == NULL || port->base == 0) return SOLO_LINE_ERROR;
+    return (inb(port->base + 6) & 0x40) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_get_cd(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cd(solo_serial_t *port)
 {
-    if (port == NULL || port->base == 0) return -1;
-    return (inb(port->base + 6) & 0x80) ? 1 : 0;
+    if (port == NULL || port->base == 0) return SOLO_LINE_ERROR;
+    return (inb(port->base + 6) & 0x80) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_drain(solo_serial_t *port)
+solo_serial_status_t solo_serial_drain(solo_serial_t *port)
 {
     uint16_t base;
     uint32_t timeout_loops = 0;
 
     if (port == NULL || port->base == 0)
-        return -1;
+        return SOLO_SERIAL_ERROR;
     base = port->base;
 
     /*
@@ -434,10 +434,10 @@ int solo_serial_drain(solo_serial_t *port)
     while ((inb(base + 5) & 0x40) == 0) {
         kolibri_sleep(1);             /* Wait 10ms */
         if (++timeout_loops > 1000) { /* 10-second drain timeout */
-            return -1;
+            return SOLO_SERIAL_ERROR;
         }
     }
-    return 0;
+    return SOLO_SERIAL_OK;
 }
 
 void solo_serial_close(solo_serial_t *port)

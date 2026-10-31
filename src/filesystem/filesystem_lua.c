@@ -72,7 +72,7 @@ static void push_stat_table(lua_State *L, const solo_fs_stat_t *st)
     lua_pushinteger(L, (lua_Integer)st->mode);
     lua_setfield(L, -2, "mode");
 
-    lua_pushboolean(L, st->is_readonly);
+    lua_pushboolean(L, st->is_readonly == SOLO_TRUE);
     lua_setfield(L, -2, "is_readonly");
 }
 
@@ -87,7 +87,7 @@ static int lfs_exists(lua_State *L)
         lua_pushboolean(L, 0);
         return 1;
     }
-    lua_pushboolean(L, solo_fs_exists(path));
+    lua_pushboolean(L, solo_fs_exists(path) == SOLO_TRUE);
     return 1;
 }
 
@@ -128,21 +128,21 @@ static int lfs_lstat(lua_State *L)
 static int lfs_is_file(lua_State *L)
 {
     const char *path = luaL_checkstring(L, 1);
-    lua_pushboolean(L, solo_fs_is_file(path));
+    lua_pushboolean(L, solo_fs_is_file(path) == SOLO_TRUE);
     return 1;
 }
 
 static int lfs_is_dir(lua_State *L)
 {
     const char *path = luaL_checkstring(L, 1);
-    lua_pushboolean(L, solo_fs_is_dir(path));
+    lua_pushboolean(L, solo_fs_is_dir(path) == SOLO_TRUE);
     return 1;
 }
 
 static int lfs_is_symlink(lua_State *L)
 {
     const char *path = luaL_checkstring(L, 1);
-    lua_pushboolean(L, solo_fs_is_symlink(path));
+    lua_pushboolean(L, solo_fs_is_symlink(path) == SOLO_TRUE);
     return 1;
 }
 
@@ -308,7 +308,7 @@ static int lfs_copy(lua_State *L)
 {
     const char *src = luaL_checkstring(L, 1);
     const char *dst = luaL_checkstring(L, 2);
-    int overwrite = lua_isnoneornil(L, 3) ? 1 : lua_toboolean(L, 3);
+    solo_bool_t overwrite = lua_isnoneornil(L, 3) ? SOLO_TRUE : (lua_toboolean(L, 3) ? SOLO_TRUE : SOLO_FALSE);
     char err_buf[128];
     err_buf[0] = '\0';
 
@@ -568,7 +568,7 @@ static int lfs_path_normalize(lua_State *L)
 static int lfs_path_is_absolute(lua_State *L)
 {
     const char *path = luaL_checkstring(L, 1);
-    lua_pushboolean(L, solo_fs_path_is_absolute(path));
+    lua_pushboolean(L, solo_fs_path_is_absolute(path) == SOLO_TRUE);
     return 1;
 }
 

@@ -124,12 +124,12 @@ solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parall
     return SOLO_PARALLEL_UNSUPPORTED;
 }
 
-int solo_parallel_drain(solo_parallel_t *port)
+solo_parallel_status_t solo_parallel_drain(solo_parallel_t *port)
 {
     if (port == NULL || port->handle == INVALID_HANDLE_VALUE) {
-        return -1;
+        return SOLO_PARALLEL_ERROR;
     }
-    return FlushFileBuffers(port->handle) ? 0 : -1;
+    return FlushFileBuffers(port->handle) ? SOLO_PARALLEL_OK : SOLO_PARALLEL_ERROR;
 }
 
 void solo_parallel_close(solo_parallel_t *port)

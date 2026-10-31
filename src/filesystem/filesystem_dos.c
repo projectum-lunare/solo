@@ -30,7 +30,7 @@ struct solo_fs_dir {
     int finished;
 };
 
-solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_links, char *err_buf, size_t err_cap)
+solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, solo_bool_t follow_links, char *err_buf, size_t err_cap)
 {
     struct stat s;
     (void)follow_links;
@@ -51,7 +51,7 @@ solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_
     st->atime = (long)s.st_atime;
     st->ctime = (long)s.st_ctime;
     st->mode = (int)(s.st_mode & 07777);
-    st->is_readonly = !(s.st_mode & 0222);
+    st->is_readonly = !(s.st_mode & 0222) ? SOLO_TRUE : SOLO_FALSE;
 
     if (s.st_mode & S_IFDIR) {
         st->type = SOLO_FS_TYPE_DIR;

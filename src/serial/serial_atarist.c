@@ -250,46 +250,46 @@ solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms
     return SOLO_SERIAL_OK;
 }
 
-int solo_serial_get_cts(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cts(solo_serial_t *port)
 {
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 }
 
-int solo_serial_get_dsr(solo_serial_t *port)
+solo_line_state_t solo_serial_get_dsr(solo_serial_t *port)
 {
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 }
 
-int solo_serial_get_cd(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cd(solo_serial_t *port)
 {
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 }
 
-int solo_serial_get_ri(solo_serial_t *port)
+solo_line_state_t solo_serial_get_ri(solo_serial_t *port)
 {
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 }
 
-int solo_serial_drain(solo_serial_t *port)
+solo_serial_status_t solo_serial_drain(solo_serial_t *port)
 {
     long timeout = 2000000L;
 
     if (port == NULL) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
 
     /* Wait until transmitter buffer has emptied */
     while (Bcostat(port->dev_id) == 0) {
         if (--timeout <= 0) {
-            return -1;
+            return SOLO_SERIAL_ERROR;
         }
     }
 
-    return 0;
+    return SOLO_SERIAL_OK;
 }
 
 solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state)

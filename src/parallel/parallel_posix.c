@@ -192,13 +192,13 @@ solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parall
     return SOLO_PARALLEL_UNSUPPORTED;
 }
 
-int solo_parallel_drain(solo_parallel_t *port)
+solo_parallel_status_t solo_parallel_drain(solo_parallel_t *port)
 {
     int pins = 0;
     int timeout_count = 1000;
 
     if (port == NULL || port->fd < 0) {
-        return -1;
+        return SOLO_PARALLEL_ERROR;
     }
 
     fsync(port->fd);
@@ -207,12 +207,12 @@ int solo_parallel_drain(solo_parallel_t *port)
     while (solo_parallel_get_status(port, &pins) == SOLO_PARALLEL_OK &&
            (pins & SOLO_PARALLEL_PIN_BUSY)) {
         if (--timeout_count <= 0) {
-            return -1; /* Printer still busy after timeout */
+            return SOLO_PARALLEL_ERROR; /* Printer still busy after timeout */
         }
         usleep(1000); /* 1 ms */
     }
 
-    return 0;
+    return SOLO_PARALLEL_OK;
 }
 
 void solo_parallel_close(solo_parallel_t *port)

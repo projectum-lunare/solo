@@ -40,7 +40,7 @@ static void win_filetime_to_epoch(const FILETIME *ft, long *out_epoch)
     }
 }
 
-solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_links, char *err_buf, size_t err_cap)
+solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, solo_bool_t follow_links, char *err_buf, size_t err_cap)
 {
     WIN32_FILE_ATTRIBUTE_DATA fad;
     (void)follow_links;
@@ -62,7 +62,7 @@ solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_
     win_filetime_to_epoch(&fad.ftLastAccessTime, &st->atime);
     win_filetime_to_epoch(&fad.ftCreationTime, &st->ctime);
 
-    st->is_readonly = (fad.dwFileAttributes & FILE_ATTRIBUTE_READONLY) ? 1 : 0;
+    st->is_readonly = (fad.dwFileAttributes & FILE_ATTRIBUTE_READONLY) ? SOLO_TRUE : SOLO_FALSE;
 
     if (fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
         st->type = SOLO_FS_TYPE_DIR;

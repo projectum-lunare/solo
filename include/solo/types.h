@@ -19,6 +19,56 @@ extern "C" {
 
 /*
  * =============================================================================
+ * Canonical Boolean Type & Values
+ * =============================================================================
+ * Strict C89/C90 compatible boolean type with seamless C99 <stdbool.h> and C++
+ * interoperability. Guarantees 0 is SOLO_FALSE and 1 is SOLO_TRUE across all
+ * architectures and compilers.
+ */
+#if defined(__cplusplus)
+    typedef bool solo_bool_t;
+    #ifndef SOLO_FALSE
+    #define SOLO_FALSE false
+    #define SOLO_TRUE  true
+    #endif
+#elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
+    #include <stdbool.h>
+    typedef bool solo_bool_t;
+    #ifndef SOLO_FALSE
+    #define SOLO_FALSE false
+    #define SOLO_TRUE  true
+    #endif
+#else
+    typedef enum solo_bool {
+        SOLO_FALSE = 0,
+        SOLO_TRUE  = 1
+    } solo_bool_t;
+    #ifndef SOLO_FALSE
+    #define SOLO_FALSE SOLO_FALSE
+    #define SOLO_TRUE  SOLO_TRUE
+    #endif
+#endif
+
+/*
+ * =============================================================================
+ * Canonical Hardware Logic Level / Signal Line State Enum
+ * =============================================================================
+ * Expresses digital logic levels and physical signal line states across
+ * serial, parallel, and GPIO interfaces without ambiguous tri-state integers.
+ */
+typedef enum solo_line_state {
+    SOLO_LINE_ERROR = -1, /* Signal query failed or unsupported on hardware */
+    SOLO_LINE_LOW   =  0, /* Deasserted / inactive / logical low (0) */
+    SOLO_LINE_HIGH  =  1  /* Asserted / active / logical high (1) */
+} solo_line_state_t;
+
+#define SOLO_LINE_OFF      SOLO_LINE_LOW
+#define SOLO_LINE_ON       SOLO_LINE_HIGH
+#define SOLO_LINE_INACTIVE SOLO_LINE_LOW
+#define SOLO_LINE_ACTIVE   SOLO_LINE_HIGH
+
+/*
+ * =============================================================================
  * Canonical I/O and System Status Enum
  * =============================================================================
  * Unifies return codes across all solo subsystems (socket, serial, parallel,

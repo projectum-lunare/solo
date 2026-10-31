@@ -281,44 +281,44 @@ solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms
     return SOLO_SERIAL_OK;
 }
 
-int solo_serial_get_cts(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cts(solo_serial_t *port)
 {
     DWORD modem_stat = 0;
-    if (port == NULL || port->handle == INVALID_HANDLE_VALUE) return -1;
-    if (!GetCommModemStatus(port->handle, &modem_stat)) return -1;
-    return (modem_stat & MS_CTS_ON) ? 1 : 0;
+    if (port == NULL || port->handle == INVALID_HANDLE_VALUE) return SOLO_LINE_ERROR;
+    if (!GetCommModemStatus(port->handle, &modem_stat)) return SOLO_LINE_ERROR;
+    return (modem_stat & MS_CTS_ON) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_get_dsr(solo_serial_t *port)
+solo_line_state_t solo_serial_get_dsr(solo_serial_t *port)
 {
     DWORD modem_stat = 0;
-    if (port == NULL || port->handle == INVALID_HANDLE_VALUE) return -1;
-    if (!GetCommModemStatus(port->handle, &modem_stat)) return -1;
-    return (modem_stat & MS_DSR_ON) ? 1 : 0;
+    if (port == NULL || port->handle == INVALID_HANDLE_VALUE) return SOLO_LINE_ERROR;
+    if (!GetCommModemStatus(port->handle, &modem_stat)) return SOLO_LINE_ERROR;
+    return (modem_stat & MS_DSR_ON) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_get_cd(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cd(solo_serial_t *port)
 {
     DWORD modem_stat = 0;
-    if (port == NULL || port->handle == INVALID_HANDLE_VALUE) return -1;
-    if (!GetCommModemStatus(port->handle, &modem_stat)) return -1;
-    return (modem_stat & MS_RLSD_ON) ? 1 : 0;
+    if (port == NULL || port->handle == INVALID_HANDLE_VALUE) return SOLO_LINE_ERROR;
+    if (!GetCommModemStatus(port->handle, &modem_stat)) return SOLO_LINE_ERROR;
+    return (modem_stat & MS_RLSD_ON) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_get_ri(solo_serial_t *port)
+solo_line_state_t solo_serial_get_ri(solo_serial_t *port)
 {
     DWORD modem_stat = 0;
-    if (port == NULL || port->handle == INVALID_HANDLE_VALUE) return -1;
-    if (!GetCommModemStatus(port->handle, &modem_stat)) return -1;
-    return (modem_stat & MS_RING_ON) ? 1 : 0;
+    if (port == NULL || port->handle == INVALID_HANDLE_VALUE) return SOLO_LINE_ERROR;
+    if (!GetCommModemStatus(port->handle, &modem_stat)) return SOLO_LINE_ERROR;
+    return (modem_stat & MS_RING_ON) ? SOLO_LINE_HIGH : SOLO_LINE_LOW;
 }
 
-int solo_serial_drain(solo_serial_t *port)
+solo_serial_status_t solo_serial_drain(solo_serial_t *port)
 {
     if (port == NULL || port->handle == INVALID_HANDLE_VALUE) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
-    return FlushFileBuffers(port->handle) ? 0 : -1;
+    return FlushFileBuffers(port->handle) ? SOLO_SERIAL_OK : SOLO_SERIAL_ERROR;
 }
 
 void solo_serial_close(solo_serial_t *port)

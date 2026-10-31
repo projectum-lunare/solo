@@ -27,7 +27,7 @@ struct solo_fs_dir {
     int finished;
 };
 
-solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_links, char *err_buf, size_t err_cap)
+solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, solo_bool_t follow_links, char *err_buf, size_t err_cap)
 {
     _DTA my_dta;
     _DTA *old_dta;
@@ -54,7 +54,7 @@ solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_
     st->mtime = 0;
     st->atime = 0;
     st->ctime = 0;
-    st->is_readonly = (my_dta.dta_attribute & 0x01) ? 1 : 0;
+    st->is_readonly = (my_dta.dta_attribute & 0x01) ? SOLO_TRUE : SOLO_FALSE;
     if (my_dta.dta_attribute & 0x10) {
         st->type = SOLO_FS_TYPE_DIR;
         st->mode = st->is_readonly ? 0555 : 0777;

@@ -37,7 +37,7 @@ static void wstr_to_str(const WCHAR *ws, char *s, int max_len)
     WideCharToMultiByte(CP_ACP, 0, ws, -1, s, max_len, NULL, NULL);
 }
 
-solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_links, char *err_buf, size_t err_cap)
+solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, solo_bool_t follow_links, char *err_buf, size_t err_cap)
 {
     WCHAR wpath[MAX_PATH];
     DWORD attr;
@@ -59,7 +59,7 @@ solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_
         return SOLO_ERROR;
     }
 
-    st->is_readonly = (attr & FILE_ATTRIBUTE_READONLY) ? 1 : 0;
+    st->is_readonly = (attr & FILE_ATTRIBUTE_READONLY) ? SOLO_TRUE : SOLO_FALSE;
     if (attr & FILE_ATTRIBUTE_DIRECTORY) {
         st->type = SOLO_FS_TYPE_DIR;
         st->mode = st->is_readonly ? 0555 : 0777;

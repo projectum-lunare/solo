@@ -54,7 +54,7 @@ static int lsolo_parallel_drain(lua_State *L)
         return luaL_error(L, "attempt to drain closed parallel port");
     }
 
-    if (solo_parallel_drain(p->handle) != 0) {
+    if (solo_parallel_drain(p->handle) != SOLO_PARALLEL_OK) {
         lua_pushboolean(L, 0);
         lua_pushstring(L, "parallel drain failed");
         return 2;

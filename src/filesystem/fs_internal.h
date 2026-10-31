@@ -35,7 +35,7 @@ struct solo_file {
  * PAL (Platform Abstraction Layer) SPI Prototypes
  * Implemented across POSIX, Windows, DOS, Amiga, Atari, OS/2, Plan 9, etc.
  */
-solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_links, char *err_buf, size_t err_cap);
+solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, solo_bool_t follow_links, char *err_buf, size_t err_cap);
 solo_status_t solo_pal_fs_mkdir(const char *path, int mode, char *err_buf, size_t err_cap);
 solo_status_t solo_pal_fs_rmdir(const char *path, char *err_buf, size_t err_cap);
 solo_status_t solo_pal_fs_unlink(const char *path, char *err_buf, size_t err_cap);

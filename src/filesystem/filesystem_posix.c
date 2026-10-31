@@ -38,7 +38,7 @@ struct solo_fs_dir {
     char path[SOLO_PATH_MAX];
 };
 
-solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_links, char *err_buf, size_t err_cap)
+solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, solo_bool_t follow_links, char *err_buf, size_t err_cap)
 {
     struct stat s;
     int res;
@@ -71,7 +71,7 @@ solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_
     st->atime = (long)s.st_atime;
     st->ctime = (long)s.st_ctime;
     st->mode = (int)(s.st_mode & 07777);
-    st->is_readonly = !(s.st_mode & 0222);
+    st->is_readonly = !(s.st_mode & 0222) ? SOLO_TRUE : SOLO_FALSE;
 
     if (S_ISDIR(s.st_mode)) {
         st->type = SOLO_FS_TYPE_DIR;
@@ -233,7 +233,7 @@ solo_status_t solo_pal_fs_dir_next(solo_fs_dir_t *dir, solo_fs_dirent_t *ent)
             char full_path[SOLO_PATH_MAX];
             solo_fs_stat_t st;
             if (solo_fs_path_join(dir->path, ent->name, full_path, sizeof(full_path)) == SOLO_OK) {
-                if (solo_pal_fs_stat(full_path, &st, 0, NULL, 0) == SOLO_OK) {
+                if (solo_pal_fs_stat(full_path, &st, SOLO_FALSE, NULL, 0) == SOLO_OK) {
                     ent->type = st.type;
                 }
             }

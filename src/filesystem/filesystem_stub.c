@@ -21,7 +21,7 @@ struct solo_fs_dir {
     int dummy;
 };
 
-solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_links, char *err_buf, size_t err_cap)
+solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, solo_bool_t follow_links, char *err_buf, size_t err_cap)
 {
     FILE *fp;
     (void)follow_links;
@@ -44,6 +44,7 @@ solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_
 
     st->type = SOLO_FS_TYPE_FILE;
     st->mode = 0644;
+    st->is_readonly = SOLO_FALSE;
     return SOLO_OK;
 }
 

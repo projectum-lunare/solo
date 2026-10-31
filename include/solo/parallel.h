@@ -79,8 +79,9 @@ solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parall
 
 /*
  * Waits for the printer to empty its hardware buffer and deassert BUSY (hardware drain).
+ * Returns SOLO_PARALLEL_OK on success, or SOLO_PARALLEL_ERROR on timeout or failure.
  */
-int solo_parallel_drain(solo_parallel_t *port);
+solo_parallel_status_t solo_parallel_drain(solo_parallel_t *port);
 
 /*
  * Closes the parallel port and frees allocated resources.

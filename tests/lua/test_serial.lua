@@ -64,11 +64,14 @@ describe("solo.serial (Physical Serial RS-232 Driver Signatures)", function()
         assert_eq(s.baud.B38400, 38400)
         assert_eq(s.baud.B115200, 115200)
 
-        -- Modem line control states
+        -- Modem line control & logic level states
         assert_eq(type(s.line), "table")
         assert_eq(s.line.IGNORE, -1)
         assert_eq(s.line.OFF, 0)
         assert_eq(s.line.ON, 1)
+        assert_eq(s.line.LOW, 0)
+        assert_eq(s.line.HIGH, 1)
+        assert_eq(s.line.ERROR, -1)
 
         -- Return status codes
         assert_eq(type(s.status), "table")

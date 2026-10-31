@@ -66,6 +66,13 @@ TEST test_serial_enums(void)
     ASSERT_EQ(0, SOLO_SERIAL_LINE_OFF);
     ASSERT_EQ(1, SOLO_SERIAL_LINE_ON);
 
+    /* Canonical hardware logic levels */
+    ASSERT_EQ(-1, SOLO_LINE_ERROR);
+    ASSERT_EQ(0, SOLO_LINE_LOW);
+    ASSERT_EQ(1, SOLO_LINE_HIGH);
+    ASSERT_EQ(0, SOLO_LINE_OFF);
+    ASSERT_EQ(1, SOLO_LINE_ON);
+
     /* Verify configuration struct assignment */
     opts.baud = SOLO_SERIAL_BAUD_115200;
     opts.data_bits = SOLO_SERIAL_DATA_8;
@@ -109,10 +116,10 @@ TEST test_serial_null_guards(void)
     ASSERT_EQ(SOLO_SERIAL_ERROR, solo_serial_drain(NULL));
     ASSERT_EQ(SOLO_SERIAL_ERROR, solo_serial_set_rts(NULL, SOLO_SERIAL_LINE_ON));
     ASSERT_EQ(SOLO_SERIAL_ERROR, solo_serial_set_dtr(NULL, SOLO_SERIAL_LINE_OFF));
-    ASSERT_EQ(-1, solo_serial_get_cts(NULL));
-    ASSERT_EQ(-1, solo_serial_get_dsr(NULL));
-    ASSERT_EQ(-1, solo_serial_get_cd(NULL));
-    ASSERT_EQ(-1, solo_serial_get_ri(NULL));
+    ASSERT_EQ(SOLO_LINE_ERROR, solo_serial_get_cts(NULL));
+    ASSERT_EQ(SOLO_LINE_ERROR, solo_serial_get_dsr(NULL));
+    ASSERT_EQ(SOLO_LINE_ERROR, solo_serial_get_cd(NULL));
+    ASSERT_EQ(SOLO_LINE_ERROR, solo_serial_get_ri(NULL));
 
     /* Opening nonexistent serial device path */
     err_buf[0] = '\0';

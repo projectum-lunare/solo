@@ -60,10 +60,10 @@ solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parall
     return SOLO_PARALLEL_UNSUPPORTED;
 }
 
-int solo_parallel_drain(solo_parallel_t *port)
+solo_parallel_status_t solo_parallel_drain(solo_parallel_t *port)
 {
     (void)port;
-    return -1;
+    return SOLO_PARALLEL_UNSUPPORTED;
 }
 
 void solo_parallel_close(solo_parallel_t *port)

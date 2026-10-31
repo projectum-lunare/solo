@@ -23,7 +23,7 @@ struct solo_fs_dir {
     int finished;
 };
 
-solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_links, char *err_buf, size_t err_cap)
+solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, solo_bool_t follow_links, char *err_buf, size_t err_cap)
 {
     (void)follow_links;
     if (path == NULL || st == NULL) {
@@ -33,6 +33,7 @@ solo_status_t solo_pal_fs_stat(const char *path, solo_fs_stat_t *st, int follow_
     memset(st, 0, sizeof(*st));
     st->type = SOLO_FS_TYPE_FILE;
     st->mode = 0666;
+    st->is_readonly = SOLO_FALSE;
     return SOLO_OK;
 }
 

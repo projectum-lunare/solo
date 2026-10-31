@@ -265,37 +265,37 @@ solo_serial_status_t solo_serial_set_timeout(solo_serial_t *port, int timeout_ms
     return SOLO_SERIAL_OK;
 }
 
-int solo_serial_get_cts(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cts(solo_serial_t *port)
 {
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 }
 
-int solo_serial_get_dsr(solo_serial_t *port)
+solo_line_state_t solo_serial_get_dsr(solo_serial_t *port)
 {
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 }
 
-int solo_serial_get_cd(solo_serial_t *port)
+solo_line_state_t solo_serial_get_cd(solo_serial_t *port)
 {
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 }
 
-int solo_serial_get_ri(solo_serial_t *port)
+solo_line_state_t solo_serial_get_ri(solo_serial_t *port)
 {
     (void)port;
-    return -1;
+    return SOLO_LINE_ERROR;
 }
 
-int solo_serial_drain(solo_serial_t *port)
+solo_serial_status_t solo_serial_drain(solo_serial_t *port)
 {
     if (port == NULL || port->io == NULL || !port->is_open) {
-        return -1;
+        return SOLO_SERIAL_ERROR;
     }
     /* DoIO CMD_WRITE is synchronous in Exec serial.device */
-    return 0;
+    return SOLO_SERIAL_OK;
 }
 
 solo_serial_status_t solo_serial_set_rts(solo_serial_t *port, solo_serial_line_t state)

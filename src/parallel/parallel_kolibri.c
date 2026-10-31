@@ -225,23 +225,23 @@ solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parall
     return SOLO_PARALLEL_UNSUPPORTED;
 }
 
-int solo_parallel_drain(solo_parallel_t *port)
+solo_parallel_status_t solo_parallel_drain(solo_parallel_t *port)
 {
     uint16_t base;
     uint32_t timeout_loops = 0;
 
     if (port == NULL || port->base == 0)
-        return -1;
+        return SOLO_PARALLEL_ERROR;
     base = port->base;
 
     /* Wait until printer is not busy */
     while ((inb(base + 1) & 0x80) == 0) {
         kolibri_sleep(1);
         if (++timeout_loops > 1000) { /* 10-second drain timeout */
-            return -1;
+            return SOLO_PARALLEL_ERROR;
         }
     }
-    return 0;
+    return SOLO_PARALLEL_OK;
 }
 
 void solo_parallel_close(solo_parallel_t *port)

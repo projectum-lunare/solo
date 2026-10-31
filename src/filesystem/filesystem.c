@@ -45,31 +45,31 @@ static int is_sep(char c)
     return (c == '/' || c == '\\');
 }
 
-int solo_fs_path_is_absolute(const char *path)
+solo_bool_t solo_fs_path_is_absolute(const char *path)
 {
     if (path == NULL || path[0] == '\0') {
-        return 0;
+        return SOLO_FALSE;
     }
     if (path[0] == '/' || path[0] == '\\') {
-        return 1;
+        return SOLO_TRUE;
     }
 #if SOLO_IS_WINDOWS || SOLO_IS_DOS || SOLO_IS_OS2
     if (isalpha((unsigned char)path[0]) && path[1] == ':') {
         if (path[2] == '/' || path[2] == '\\' || path[2] == '\0') {
-            return 1;
+            return SOLO_TRUE;
         }
     }
 #elif SOLO_IS_AMIGA
     {
         const char *p = path;
         while (*p) {
-            if (*p == ':') return 1;
+            if (*p == ':') return SOLO_TRUE;
             if (*p == '/') break;
             p++;
         }
     }
 #endif
-    return 0;
+    return SOLO_FALSE;
 }
 
 solo_status_t solo_fs_path_join(const char *p1, const char *p2, char *out, size_t out_cap)
@@ -360,50 +360,50 @@ solo_status_t solo_fs_path_normalize(const char *path, char *out, size_t out_cap
  * 2. File & Directory Inspection (Metadata & Stat)
  * ============================================================================= */
 
-int solo_fs_exists(const char *path)
+solo_bool_t solo_fs_exists(const char *path)
 {
     solo_fs_stat_t st;
     if (path == NULL || path[0] == '\0') {
-        return 0;
+        return SOLO_FALSE;
     }
-    return (solo_pal_fs_stat(path, &st, 1, NULL, 0) == SOLO_OK);
+    return (solo_pal_fs_stat(path, &st, SOLO_TRUE, NULL, 0) == SOLO_OK) ? SOLO_TRUE : SOLO_FALSE;
 }
 
 solo_status_t solo_fs_stat(const char *path, solo_fs_stat_t *st, char *err_buf, size_t err_cap)
 {
-    return solo_pal_fs_stat(path, st, 1, err_buf, err_cap);
+    return solo_pal_fs_stat(path, st, SOLO_TRUE, err_buf, err_cap);
 }
 
 solo_status_t solo_fs_lstat(const char *path, solo_fs_stat_t *st, char *err_buf, size_t err_cap)
 {
-    return solo_pal_fs_stat(path, st, 0, err_buf, err_cap);
+    return solo_pal_fs_stat(path, st, SOLO_FALSE, err_buf, err_cap);
 }
 
-int solo_fs_is_file(const char *path)
+solo_bool_t solo_fs_is_file(const char *path)
 {
     solo_fs_stat_t st;
-    if (solo_pal_fs_stat(path, &st, 1, NULL, 0) == SOLO_OK) {
-        return (st.type == SOLO_FS_TYPE_FILE);
+    if (solo_pal_fs_stat(path, &st, SOLO_TRUE, NULL, 0) == SOLO_OK) {
+        return (st.type == SOLO_FS_TYPE_FILE) ? SOLO_TRUE : SOLO_FALSE;
     }
-    return 0;
+    return SOLO_FALSE;
 }
 
-int solo_fs_is_dir(const char *path)
+solo_bool_t solo_fs_is_dir(const char *path)
 {
     solo_fs_stat_t st;
-    if (solo_pal_fs_stat(path, &st, 1, NULL, 0) == SOLO_OK) {
-        return (st.type == SOLO_FS_TYPE_DIR);
+    if (solo_pal_fs_stat(path, &st, SOLO_TRUE, NULL, 0) == SOLO_OK) {
+        return (st.type == SOLO_FS_TYPE_DIR) ? SOLO_TRUE : SOLO_FALSE;
     }
-    return 0;
+    return SOLO_FALSE;
 }
 
-int solo_fs_is_symlink(const char *path)
+solo_bool_t solo_fs_is_symlink(const char *path)
 {
     solo_fs_stat_t st;
-    if (solo_pal_fs_stat(path, &st, 0, NULL, 0) == SOLO_OK) {
-        return (st.type == SOLO_FS_TYPE_SYMLINK);
+    if (solo_pal_fs_stat(path, &st, SOLO_FALSE, NULL, 0) == SOLO_OK) {
+        return (st.type == SOLO_FS_TYPE_SYMLINK) ? SOLO_TRUE : SOLO_FALSE;
     }
-    return 0;
+    return SOLO_FALSE;
 }
 
 solo_status_t solo_fs_file_size(const char *path, solo_fsize_t *out_size)
@@ -542,7 +542,7 @@ solo_status_t solo_fs_rename(const char *oldpath, const char *newpath, char *err
     return solo_pal_fs_rename(oldpath, newpath, err_buf, err_cap);
 }
 
-solo_status_t solo_fs_copy_file(const char *src, const char *dst, int overwrite, char *err_buf, size_t err_cap)
+solo_status_t solo_fs_copy_file(const char *src, const char *dst, solo_bool_t overwrite, char *err_buf, size_t err_cap)
 {
     FILE *in, *out;
     char chunk[8192];

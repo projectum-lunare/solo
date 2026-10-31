@@ -120,10 +120,10 @@ solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parall
     return SOLO_PARALLEL_UNSUPPORTED;
 }
 
-int solo_parallel_drain(solo_parallel_t *port)
+solo_parallel_status_t solo_parallel_drain(solo_parallel_t *port)
 {
     if (port == NULL || port->handle == NULLHANDLE) {
-        return -1;
+        return SOLO_PARALLEL_ERROR;
     }
 
     /*
@@ -131,7 +131,7 @@ int solo_parallel_drain(solo_parallel_t *port)
      * attached parallel printer device.
      */
     DosResetBuffer(port->handle);
-    return 0;
+    return SOLO_PARALLEL_OK;
 }
 
 void solo_parallel_close(solo_parallel_t *port)

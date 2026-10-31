@@ -136,10 +136,10 @@ solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parall
     return SOLO_PARALLEL_UNSUPPORTED;
 }
 
-int solo_parallel_drain(solo_parallel_t *port)
+solo_parallel_status_t solo_parallel_drain(solo_parallel_t *port)
 {
     if (port == NULL)
-        return -1;
+        return SOLO_PARALLEL_ERROR;
 
     /* Flush DOS file buffers if using file handle */
     if (port->fd >= 0) {
@@ -153,10 +153,10 @@ int solo_parallel_drain(solo_parallel_t *port)
             unsigned short status = _bios_printer(_PRINTER_STATUS, port->bios_port, 0);
             /* Bit 7 (0x80) is inverted BUSY line: 1 means NOT busy */
             if (status & 0x80) {
-                return 0;
+                return SOLO_PARALLEL_OK;
             }
         }
-        return -1; /* Timeout: printer still busy */
+        return SOLO_PARALLEL_ERROR; /* Timeout: printer still busy */
     }
 }
 

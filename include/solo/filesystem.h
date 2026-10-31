@@ -53,7 +53,7 @@ typedef struct solo_fs_stat {
     long           atime;        /* Last access timestamp (epoch seconds) */
     long           ctime;        /* Status change / creation timestamp */
     int            mode;         /* Permission bits (POSIX octal mode flags) */
-    int            is_readonly;  /* 1 if read-only attribute is set, 0 otherwise */
+    solo_bool_t    is_readonly;  /* SOLO_TRUE if read-only attribute is set, SOLO_FALSE otherwise */
 } solo_fs_stat_t;
 
 typedef struct solo_fs_dirent {
@@ -109,9 +109,9 @@ solo_status_t solo_fs_path_ext(const char *path, char *out, size_t out_cap);
 
 /*
  * Checks whether the given path is absolute.
- * Returns 1 if absolute, 0 if relative or invalid.
+ * Returns SOLO_TRUE if absolute, SOLO_FALSE if relative or invalid.
  */
-int solo_fs_path_is_absolute(const char *path);
+solo_bool_t solo_fs_path_is_absolute(const char *path);
 
 /*
  * Returns the primary path separator character for the current platform.
@@ -126,9 +126,9 @@ char solo_fs_path_separator(void);
 
 /*
  * Checks whether a file, device node, or directory exists at path.
- * Backward-compatible entry point. Returns 1 if exists, 0 otherwise.
+ * Returns SOLO_TRUE if exists, SOLO_FALSE otherwise.
  */
-int solo_fs_exists(const char *path);
+solo_bool_t solo_fs_exists(const char *path);
 
 /*
  * Retrieves metadata for the filesystem entry at path, following symlinks.
@@ -145,11 +145,11 @@ solo_status_t solo_fs_lstat(const char *path, solo_fs_stat_t *st, char *err_buf,
 
 /*
  * Predicates: fast boolean checks.
- * Return 1 if true, 0 if false or on error.
+ * Return SOLO_TRUE if condition holds, SOLO_FALSE if false or on error.
  */
-int solo_fs_is_file(const char *path);
-int solo_fs_is_dir(const char *path);
-int solo_fs_is_symlink(const char *path);
+solo_bool_t solo_fs_is_file(const char *path);
+solo_bool_t solo_fs_is_dir(const char *path);
+solo_bool_t solo_fs_is_symlink(const char *path);
 
 /*
  * Retrieves file size directly.
@@ -201,10 +201,10 @@ solo_status_t solo_fs_rename(const char *oldpath, const char *newpath, char *err
 
 /*
  * Copies a regular file from src to dst.
- * If overwrite is 0 and dst already exists, fails with SOLO_ERROR.
+ * If overwrite is SOLO_FALSE and dst already exists, fails with SOLO_ERROR.
  * Returns SOLO_OK on success, or SOLO_ERROR on failure.
  */
-solo_status_t solo_fs_copy_file(const char *src, const char *dst, int overwrite, char *err_buf, size_t err_cap);
+solo_status_t solo_fs_copy_file(const char *src, const char *dst, solo_bool_t overwrite, char *err_buf, size_t err_cap);
 
 /*
  * Changes the permission mode of a file or directory.

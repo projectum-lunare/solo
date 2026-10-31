@@ -91,7 +91,7 @@ TEST test_parallel_exhaustive(void)
     ASSERT_EQ(SOLO_ERROR, solo_parallel_write(NULL, buf, sizeof(buf), &io_bytes));
     ASSERT_EQ(SOLO_ERROR, solo_parallel_read(NULL, buf, sizeof(buf), &io_bytes));
     ASSERT_EQ(SOLO_PARALLEL_ERROR, solo_parallel_get_status(NULL, &status));
-    ASSERT_EQ(-1, solo_parallel_drain(NULL));
+    ASSERT_EQ(SOLO_PARALLEL_ERROR, solo_parallel_drain(NULL));
     ASSERT_EQ(SOLO_PARALLEL_ERROR, solo_parallel_set_mode(NULL, SOLO_PARALLEL_MODE_SPP));
 
     /* Opening an invalid device path returns NULL and populates err_buf */

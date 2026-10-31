@@ -108,22 +108,22 @@ solo_parallel_status_t solo_parallel_set_mode(solo_parallel_t *port, solo_parall
     return SOLO_PARALLEL_UNSUPPORTED;
 }
 
-int solo_parallel_drain(solo_parallel_t *port)
+solo_parallel_status_t solo_parallel_drain(solo_parallel_t *port)
 {
     long timeout = 2000000L;
 
     if (port == NULL) {
-        return -1;
+        return SOLO_PARALLEL_ERROR;
     }
 
     /* Wait for hardware BUSY line to clear */
     while (Bcostat(port->dev_id) == 0) {
         if (--timeout <= 0) {
-            return -1;
+            return SOLO_PARALLEL_ERROR;
         }
     }
 
-    return 0;
+    return SOLO_PARALLEL_OK;
 }
 
 void solo_parallel_close(solo_parallel_t *port)
