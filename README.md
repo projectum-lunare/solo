@@ -28,6 +28,11 @@ The library is structured as a cohesive monorepo divided into specialized subsys
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
+All subsystems share a unified canonical type foundation (`include/solo/types.h`) providing strict C89/C90 types with seamless C99/C++ interoperability:
+- `solo_status_t`: Canonical I/O and syscall return status (`SOLO_OK`, `SOLO_ERROR`, `SOLO_AGAIN`, `SOLO_EOF`, `SOLO_UNSUPPORTED`).
+- `solo_bool_t`: Canonical boolean type (`SOLO_TRUE` = 1, `SOLO_FALSE` = 0) eliminating ambiguous integer truth values.
+- `solo_line_state_t`: Physical signal line state (`SOLO_LINE_HIGH`, `SOLO_LINE_LOW`, `SOLO_LINE_ERROR`).
+
 ### 1. `platform` — Platform & Environment Foundation
 
 - Comprehensive compile-time and runtime identification of compilers (`gcc`, `clang`, `watcom`, `sasc`, `vbcc`, `msvc`), architectures (`x86_64`, `x86`, `arm`, `arm64`, `m68k`, `ppc`, `mips`, `riscv64`, `wasm32`), bitness, and endianness.
@@ -35,14 +40,15 @@ The library is structured as a cohesive monorepo divided into specialized subsys
 
 ### 2. `filesystem` (alias `fs`) — Storage & File Operations
 
-- Portable filesystem operations across vintage and modern operating systems without crashing on raw device nodes (`solo_fs_exists`).
+- Portable filesystem operations across vintage and modern operating systems without crashing on raw device nodes.
+- Type-safe predicates returning canonical `solo_bool_t` (`solo_fs_exists`, `solo_fs_is_file`, `solo_fs_is_dir`, `solo_fs_is_symlink`, `solo_fs_path_is_absolute`).
 - Clean separation between storage syscalls and environment metadata.
 - Ergonomic alias: accessible interchangeably as `solo.filesystem` or `solo.fs` (both in the module table and via `require("solo.fs")`).
 
 ### 3. `parallel` — Centronics Parallel Port (LPT / SPP)
 
 - Direct hardware strobe, busy status check, and buffer drain for impact printers, matrix devices, and parallel links with typed enums (`solo.parallel.mode`, `solo.parallel.pin`, `solo.parallel.port`, `solo.parallel.status`).
-- Hardware status monitoring: queries real-time printer status pins (`BUSY`, `ACK`, `PE`, `SLCT`, `FAULT`). `solo_parallel_drain` actively polls the BUSY line until printing completes, returning an error on timeout.
+- Hardware status monitoring: queries real-time printer status pins (`BUSY`, `ACK`, `PE`, `SLCT`, `FAULT`). `solo_parallel_drain` actively polls the BUSY line until printing completes, returning `SOLO_PARALLEL_OK` or `SOLO_PARALLEL_ERROR` on timeout.
 - Standard line printer devices (`/dev/lp*`, `LPT1`) operate in Centronics SPP mode; bidirectional IEEE 1284 modes return `SOLO_PARALLEL_UNSUPPORTED` on unidirectional printer ports.
 - Backends: POSIX `/dev/lp0`, Windows NT `LPT1`, Windows CE, DOS `INT 17h` and direct I/O port strobe, Amiga `parallel.device`, Atari ST, KolibriOS, OS/2, Plan 9.
 
@@ -50,7 +56,7 @@ The library is structured as a cohesive monorepo divided into specialized subsys
 
 - Industrial-grade serial communication with typed enums (`solo.serial.flow`, `solo.serial.parity`, `solo.serial.stop_bits`, `solo.serial.data_bits`, `solo.serial.baud`, `solo.serial.line`, `solo.serial.status`): configurable baud rates, data bits, parity, stop bits, and flow control.
 - Safe default: flow control defaults to `NONE` (0). Hardware RTS/CTS is opt-in, preventing write hangs on 3-wire cables or USB adapters without CTS connected.
-- Full bidirectional UART: `write()`, `read()`, timeout control (`set_timeout()`), and modem control/status lines (`set_rts`, `set_dtr`, `get_cts`, `get_dsr`, `get_cd`, `get_ri`).
+- Full bidirectional UART: `write()`, `read()`, hardware buffer flush (`solo_serial_drain` returning `solo_serial_status_t`), timeout control (`set_timeout()`), and modem control/status lines (`set_rts`, `set_dtr`, `get_cts`, `get_dsr`, `get_cd`, `get_ri`) returning typed `solo_line_state_t` (`SOLO_LINE_HIGH`, `SOLO_LINE_LOW`, `SOLO_LINE_ERROR`).
 - Flexible initialization supporting both ergonomic options tables and classic positional parameters.
 - Backends: POSIX termios, Windows NT Comm API, Windows CE, DOS BIOS `INT 14h` / 8250 UART, Amiga `serial.device`, Atari ST, KolibriOS, OS/2, Plan 9.
 
@@ -160,7 +166,8 @@ int main(void) {
     printf("solo version: %s\n", solo_version());
     printf("OS: %s, Arch: %s\n", solo_platform_os(), solo_platform_arch());
 
-    if (solo_fs_exists("/etc/hosts")) {
+    /* Canonical boolean check */
+    if (solo_fs_exists("/etc/hosts") == SOLO_TRUE) {
         printf("Host configuration exists on disk.\n");
     }
 
