@@ -133,6 +133,16 @@ describe("solo.serial (Physical Serial RS-232 Driver Signatures)", function()
         assert_nil(p2)
         assert_eq(type(err2), "string")
     end)
+
+    -- 7. Modem line predicate aliases
+    test("exposes modem line predicate methods is_cts, is_dsr, is_cd, is_ri", function()
+        local mt = debug.getregistry()["solo.serial.port"]
+        assert_eq(type(mt.get_cts), "function")
+        assert_eq(type(mt.is_cts), "function")
+        assert_eq(type(mt.is_dsr), "function")
+        assert_eq(type(mt.is_cd), "function")
+        assert_eq(type(mt.is_ri), "function")
+    end)
 end)
 
 if arg and arg[0] and arg[0]:match("test_.*%.lua$") then

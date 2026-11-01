@@ -176,5 +176,5 @@ local port, err = serial.open("/dev/ttyUSB0", {
 * `port:drain()`: Flushes physical hardware FIFO. Returns `true` or `nil, err`.
 * `port:set_timeout(timeout_ms)`: Sets default timeout.
 * `port:set_rts(bool)` / `port:set_dtr(bool)`: Asserts/deasserts RTS/DTR output lines.
-* `port:get_cts()`, `port:get_dsr()`, `port:get_cd()`, `port:get_ri()`: Returns `serial.line.HIGH` or `serial.line.LOW`.
+* `port:get_cts()`, `port:get_dsr()`, `port:get_cd()`, `port:get_ri()`: Returns `serial.line.HIGH` or `serial.line.LOW`. (Predicate aliases `port:is_cts()`, `port:is_dsr()`, `port:is_cd()`, `port:is_ri()` are also provided).
 * `port:close()`: Closes device node immediately.

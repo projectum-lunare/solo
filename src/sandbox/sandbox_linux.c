@@ -236,6 +236,12 @@ const char *solo_sandbox_backend_name(int *version_out)
     return (b == SOLO_SANDBOX_BACKEND_LANDLOCK) ? "landlock" : "none";
 }
 
+solo_bool_t solo_sandbox_is_supported(void)
+{
+    int version = 0;
+    return (solo_sandbox_backend(&version) != SOLO_SANDBOX_BACKEND_NONE && version > 0) ? SOLO_TRUE : SOLO_FALSE;
+}
+
 solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char *err_buf, size_t err_cap)
 {
     int abi;

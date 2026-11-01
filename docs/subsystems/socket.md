@@ -185,6 +185,16 @@ Multiplexes events across multiple sockets simultaneously.
 
 ---
 
+### `solo_socket_is_blocking` / `solo_socket_is_nonblocking`
+```c
+solo_bool_t solo_socket_is_blocking(const solo_socket_t *sock);
+solo_bool_t solo_socket_is_nonblocking(const solo_socket_t *sock);
+```
+Inspects whether the socket descriptor operates in blocking or non-blocking mode.
+* **Returns:** `SOLO_TRUE` or `SOLO_FALSE` (returns `SOLO_FALSE` if `sock` is `NULL`).
+
+---
+
 ## 3. Lua API Reference
 
 ### Module Constructors
@@ -209,6 +219,8 @@ local sock = require("solo.socket")
 * `sock:sendto(data, host, port)`: Sends UDP datagram. Returns `sent_bytes` or `nil, err`.
 * `sock:recvfrom(max_len)`: Receives UDP datagram. Returns `data_str, sender_ip, sender_port`.
 * `sock:set_mode(mode)`: Switches between `sock.mode.BLOCKING` and `sock.mode.NONBLOCKING`.
+* `sock:is_blocking()`: Returns `true` if operating in blocking mode, `false` otherwise.
+* `sock:is_nonblocking()`: Returns `true` if operating in non-blocking mode, `false` otherwise.
 * `sock:set_timeout(timeout_ms)`: Configures I/O timeout in milliseconds.
 * `sock:wait(events [, timeout_ms])`: Waits on single socket (`"r"`, `"w"`, `"rw"`). Returns `true` or `nil, err`.
 * `sock:close()`: Closes socket immediately.

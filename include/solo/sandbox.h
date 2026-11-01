@@ -57,6 +57,12 @@ solo_sandbox_backend_t solo_sandbox_backend(int *version_out);
  */
 const char *solo_sandbox_backend_name(int *version_out);
 
+/**
+ * @brief Checks whether kernel sandboxing is supported on the running platform.
+ * @return SOLO_TRUE if a functional sandbox backend is available, SOLO_FALSE otherwise.
+ */
+solo_bool_t solo_sandbox_is_supported(void);
+
 /*
  * Unveils a filesystem path with given permissions (read/write/exec).
  *

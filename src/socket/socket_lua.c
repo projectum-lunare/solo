@@ -408,7 +408,17 @@ static int lsocket_is_blocking(lua_State *L)
     if (s->handle == NULL) {
         return luaL_error(L, "attempt to check blocking on closed socket");
     }
-    lua_pushboolean(L, solo_socket_get_mode(s->handle) == SOLO_SOCK_BLOCKING);
+    lua_pushboolean(L, solo_socket_is_blocking(s->handle) == SOLO_TRUE);
+    return 1;
+}
+
+static int lsocket_is_nonblocking(lua_State *L)
+{
+    lsocket_t *s = (lsocket_t *)luaL_checkudata(L, 1, SOCKET_MT);
+    if (s->handle == NULL) {
+        return luaL_error(L, "attempt to check non-blocking on closed socket");
+    }
+    lua_pushboolean(L, solo_socket_is_nonblocking(s->handle) == SOLO_TRUE);
     return 1;
 }
 
@@ -829,7 +839,8 @@ static const luaL_Reg socket_methods[] = {
     {"set_mode",     lsocket_set_mode    },
     {"set_blocking", lsocket_set_blocking},
     {"get_mode",     lsocket_get_mode    },
-    {"is_blocking",  lsocket_is_blocking },
+    {"is_blocking",     lsocket_is_blocking    },
+    {"is_nonblocking",  lsocket_is_nonblocking },
     {"set_timeout",  lsocket_set_timeout },
     {"wait",         lsocket_wait        },
     {"get_fd",       lsocket_get_fd      },

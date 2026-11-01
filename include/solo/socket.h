@@ -123,6 +123,8 @@ typedef struct solo_pollfd {
 
 solo_socket_status_t solo_socket_set_mode(solo_socket_t *sock, solo_socket_mode_t mode, char *err_buf, size_t err_cap);
 solo_socket_mode_t solo_socket_get_mode(const solo_socket_t *sock);
+solo_bool_t solo_socket_is_blocking(const solo_socket_t *sock);
+solo_bool_t solo_socket_is_nonblocking(const solo_socket_t *sock);
 solo_socket_type_t solo_socket_get_type(const solo_socket_t *sock);
 solo_socket_status_t solo_socket_set_timeout(solo_socket_t *sock, int timeout_ms, char *err_buf, size_t err_cap);
 int solo_socket_wait(solo_socket_t *sock, int events, int timeout_ms);

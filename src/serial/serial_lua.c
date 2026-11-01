@@ -18,7 +18,7 @@
 
 #include <solo/serial.h>
 
-#define SERIAL_PORT_MT "dotstar.serial.port"
+#define SERIAL_PORT_MT "solo.serial.port"
 
 typedef struct {
     solo_serial_t *handle;
@@ -490,6 +490,10 @@ static const luaL_Reg port_methods[] = {
     {"get_dsr",     lsolo_serial_get_dsr    },
     {"get_cd",      lsolo_serial_get_cd     },
     {"get_ri",      lsolo_serial_get_ri     },
+    {"is_cts",      lsolo_serial_get_cts    },
+    {"is_dsr",      lsolo_serial_get_dsr    },
+    {"is_cd",       lsolo_serial_get_cd     },
+    {"is_ri",       lsolo_serial_get_ri     },
     {"close",       lsolo_serial_close      },
     {"__close",     lsolo_serial_close      },
     {"__gc",        lsolo_serial_close      },

@@ -275,6 +275,18 @@ solo_socket_mode_t solo_socket_get_mode(const solo_socket_t *sock)
     return sock ? sock->mode : SOLO_SOCK_BLOCKING;
 }
 
+solo_bool_t solo_socket_is_blocking(const solo_socket_t *sock)
+{
+    if (sock == NULL) return SOLO_FALSE;
+    return (sock->mode == SOLO_SOCK_BLOCKING) ? SOLO_TRUE : SOLO_FALSE;
+}
+
+solo_bool_t solo_socket_is_nonblocking(const solo_socket_t *sock)
+{
+    if (sock == NULL) return SOLO_FALSE;
+    return (sock->mode == SOLO_SOCK_NONBLOCKING) ? SOLO_TRUE : SOLO_FALSE;
+}
+
 solo_socket_type_t solo_socket_get_type(const solo_socket_t *sock)
 {
     return sock ? sock->type : SOLO_SOCK_TCP;

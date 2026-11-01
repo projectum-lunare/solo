@@ -31,9 +31,7 @@ static int lsandbox_backend(lua_State *L)
 
 static int lsandbox_is_supported(lua_State *L)
 {
-    int version = 0;
-    solo_sandbox_backend_t id = solo_sandbox_backend(&version);
-    lua_pushboolean(L, id != SOLO_SANDBOX_BACKEND_NONE);
+    lua_pushboolean(L, solo_sandbox_is_supported() == SOLO_TRUE);
     return 1;
 }
 

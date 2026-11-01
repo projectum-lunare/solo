@@ -73,6 +73,7 @@ describe("solo.socket (Network Sockets & Multiplexing)", function()
         assert_true(server ~= nil, "Failed to bind server: " .. tostring(err))
         assert_eq(server:type(), "tcp")
         assert_true(server:is_blocking())
+        assert_false(server:is_nonblocking())
 
         -- Connect client socket
         local client, err_c = sock.connect("127.0.0.1", tcp_port, sock.mode.BLOCKING)
@@ -126,6 +127,7 @@ describe("solo.socket (Network Sockets & Multiplexing)", function()
         assert_true(client_sock ~= nil, "Failed to accept client on ready server")
         client_sock:set_mode("nonblocking")
         assert_false(client_sock:is_blocking())
+        assert_true(client_sock:is_nonblocking())
 
         -- Read on empty socket must return nil, "again"
         local empty_data, empty_err = client_sock:recv(128)

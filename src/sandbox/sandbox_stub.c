@@ -25,6 +25,11 @@ const char *solo_sandbox_backend_name(int *version_out)
     return "none";
 }
 
+solo_bool_t solo_sandbox_is_supported(void)
+{
+    return SOLO_FALSE;
+}
+
 solo_sandbox_status_t solo_sandbox_unveil(const char *path, int permissions, char *err_buf, size_t err_cap)
 {
     (void)path;

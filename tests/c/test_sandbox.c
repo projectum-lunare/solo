@@ -37,6 +37,13 @@ TEST test_sandbox(void)
     ASSERT(backend != NULL);
     ASSERT(strlen(backend) > 0);
 
+    /* Test predicate function solo_sandbox_is_supported() */
+    if (b != SOLO_SANDBOX_BACKEND_NONE) {
+        ASSERT_EQ(SOLO_TRUE, solo_sandbox_is_supported());
+    } else {
+        ASSERT_EQ(SOLO_FALSE, solo_sandbox_is_supported());
+    }
+
     /* The backend enum must fall within valid known backend ranges */
     ASSERT(b >= SOLO_SANDBOX_BACKEND_NONE && b <= SOLO_SANDBOX_BACKEND_CAPSICUM);
 

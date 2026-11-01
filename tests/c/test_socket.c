@@ -104,6 +104,9 @@ TEST test_socket_null_guards(void)
     ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_poll(NULL, 1, 10));
     ASSERT_EQ(SOLO_SOCK_ERROR, solo_socket_wait(NULL, SOLO_SOCK_POLL_READ, 10));
 
+    ASSERT_EQ(SOLO_FALSE, solo_socket_is_blocking(NULL));
+    ASSERT_EQ(SOLO_FALSE, solo_socket_is_nonblocking(NULL));
+
     PASS();
 }
 
@@ -142,6 +145,8 @@ TEST test_socket_tcp_sync(void)
     ASSERT(server != NULL);
     ASSERT_EQ(SOLO_SOCK_TCP, solo_socket_get_type(server));
     ASSERT_EQ(SOLO_SOCK_BLOCKING, solo_socket_get_mode(server));
+    ASSERT_EQ(SOLO_TRUE, solo_socket_is_blocking(server));
+    ASSERT_EQ(SOLO_FALSE, solo_socket_is_nonblocking(server));
 
     /* Step 2: Connect TCP client socket */
     err_buf[0] = '\0';

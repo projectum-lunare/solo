@@ -31,8 +31,9 @@ The `sandbox` subsystem provides operating system-enforced application containme
 ```c
 solo_sandbox_backend_t solo_sandbox_backend(int *version_out);
 const char *solo_sandbox_backend_name(int *version_out);
+solo_bool_t solo_sandbox_is_supported(void);
 ```
-Queries the active security subsystem and stores the kernel ABI version in `version_out` (e.g. Landlock ABI `1`, `2`, `3`, or `4`).
+Queries the active security subsystem and stores the kernel ABI version in `version_out` (e.g. Landlock ABI `1`, `2`, `3`, or `4`). `solo_sandbox_is_supported()` returns `SOLO_TRUE` if a kernel-enforced sandboxing backend is active on the current platform, or `SOLO_FALSE` otherwise.
 
 ---
 
@@ -75,6 +76,11 @@ Restricts available syscall categories on OpenBSD (e.g. `"stdio rpath wpath cpat
 
 ```lua
 local sandbox = require("solo.sandbox")
+
+-- Check sandbox support
+if sandbox.is_supported() then
+    print("Sandbox is supported")
+end
 
 -- Introspect backend
 local name, ver = sandbox.backend()

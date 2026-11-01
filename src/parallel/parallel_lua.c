@@ -18,7 +18,7 @@
 
 #include <solo/parallel.h>
 
-#define PARALLEL_PORT_MT "dotstar.parallel.port"
+#define PARALLEL_PORT_MT "solo.parallel.port"
 
 typedef struct {
     solo_parallel_t *handle;
